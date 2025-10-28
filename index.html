@@ -20,6 +20,7 @@
         th { background:#222; }
         .whale { background:#ff0; color:#000; }
         .red { color:#f66; } .green { color:#0f0; }
+        .no-data { text-align:center; color:#ccc; margin:10px 0; }
     </style>
 </head>
 <body>
@@ -29,21 +30,22 @@
         <option value="ETH">ETH</option>
         <option value="Solana">Solana</option>
     </select>
-    <input id="address" placeholder="合约地址 (如 0x55d398...)">
-    <input id="apikey" placeholder="API Key (Solana 可留空)" type="password">
+    <input id="address" placeholder="合约地址 (e.g. 0x55d398326f99059fF775485246999027B3197955)">
+    <input id="apikey" placeholder="API Key (bscscan.com/apis免费，Solana可选)" type="password">
     <button id="btn">🚀 分析</button>
 
     <div id="error" class="error"></div>
     <div id="loading">分析中...</div>
     <div id="progressBar"><div id="progressFill"></div></div>
     <div id="riskWarning"></div>
-    <div id="result"></div>
+    <div id="result" class="no-data">点击分析加载数据</div>
 
     <script>
+        console.log('LIVIA 启动 - F12查看日志');
         const CFG = {
-            BSC: { base: "https://api.bscscan.com/api", dec:18, scan:"bscscan.com" },
-            ETH: { base: "https://api.etherscan.io/api", dec:18, scan:"etherscan.io" },
-            Solana: { base: "https://public-api.solscan.io", dec:9, scan:"solscan.io" }
+            BSC: { base: "https://api.bscscan.com/api", dec:18, scan:"bscscan.com", holderEnd: "?module=token&action=tokenholderlist&contractaddress=", supplyEnd: "?module=stats&action=tokensupply&contractaddress=" },
+            ETH: { base: "https://api.etherscan.io/api", dec:18, scan:"etherscan.io", holderEnd: "?module=token&action=tokenholderlist&contractaddress=", supplyEnd: "?module=stats&action=tokensupply&contractaddress=" },
+            Solana: { base: "https://public-api.solscan.io", dec:9, scan:"solscan.io", holderEnd: "/token/holders?tokenAddress=", supplyEnd: "/token/meta?tokenAddress=" }
         };
 
         document.getElementById('btn').onclick = async () => {
@@ -56,71 +58,85 @@
             const fill = document.getElementById('progressFill');
             const risk = document.getElementById('riskWarning');
             const res = document.getElementById('result');
+            const btn = document.getElementById('btn');
+
+            console.log('分析启动:', { chain, addr, hasKey: !!key });
 
             err.style.display = 'none'; risk.style.display = 'none'; load.style.display = 'block'; bar.style.display = 'block'; fill.style.width = '10%';
-            res.innerHTML = '获取中...'; document.getElementById('btn').disabled = true;
+            res.innerHTML = '获取中...'; btn.disabled = true;
 
-            if (!addr) { err.textContent = '请输入地址'; err.style.display = 'block'; done(); return; }
-            if (chain !== 'Solana' && !key) { err.textContent = '请输入 API Key'; err.style.display = 'block'; done(); return; }
+            if (!addr) { err.textContent = '请输入合约地址'; err.style.display = 'block'; done(); return; }
+            if (chain !== 'Solana' && !key) { err.textContent = '请输入API Key'; err.style.display = 'block'; done(); return; }
+            if (chain !== 'Solana' && !/^0x[a-fA-F0-9]{40}$/.test(addr)) { err.textContent = '无效地址格式'; err.style.display = 'block'; done(); return; }
 
             try {
                 const c = CFG[chain];
                 let supply = 0;
 
-                // 获取总供应
+                console.log('请求供应量...');
                 if (chain === 'Solana') {
-                    const r = await fetch(`${c.base}/token/meta?tokenAddress=${addr}`);
+                    const r = await fetch(`${c.base}${c.supplyEnd}${addr}`);
                     const d = await r.json();
-                    supply = d.data ? d.data.supply / (10 ** c.dec) : 0;
+                    console.log('Solana供应响应:', d);
+                    supply = d.data ? parseFloat(d.data.supply) / Math.pow(10, c.dec) : 0;
                 } else {
-                    const r = await fetch(`${c.base}?module=stats&action=tokensupply&contractaddress=${addr}&apikey=${key}`);
+                    const r = await fetch(`${c.base}${c.supplyEnd}${addr}&apikey=${key}`);
                     const d = await r.json();
-                    supply = d.status === '1' ? d.result / (10 ** c.dec) : 0;
+                    console.log('EVM供应响应:', d);
+                    supply = d.status === '1' ? parseFloat(d.result) / Math.pow(10, c.dec) : 0;
                 }
                 fill.style.width = '50%';
+                console.log('供应量计算:', supply);
 
-                // 获取前10持有人
+                console.log('请求持有人...');
                 let holders = [];
                 if (chain === 'Solana') {
-                    const r = await fetch(`${c.base}/token/holders?tokenAddress=${addr}&offset=0&limit=10`);
+                    const r = await fetch(`${c.base}${c.holderEnd}${addr}&offset=0&limit=10`);
                     const d = await r.json();
-                    holders = d.data ? d.data.map(h => ({a: h.owner, b: h.amount / (10 ** c.dec)})) : [];
+                    console.log('Solana持有人响应:', d);
+                    holders = d.data ? d.data.map(h => ({a: h.owner, b: parseFloat(h.amount) / Math.pow(10, c.dec)})) : [];
                 } else {
-                    const r = await fetch(`${c.base}?module=token&action=tokenholderlist&contractaddress=${addr}&page=1&offset=10&apikey=${key}`);
+                    const r = await fetch(`${c.base}${c.holderEnd}${addr}&page=1&offset=1&limit=10&apikey=${key}`);
                     const d = await r.json();
-                    holders = d.status === '1' ? d.result.map(h => ({a: h.TokenHolderAddress, b: parseInt(h.Value) / (10 ** c.dec)})) : [];
+                    console.log('EVM持有人响应:', d);
+                    holders = d.status === '1' && d.result ? d.result.map(h => ({a: h.TokenHolder.Address, b: parseFloat(h.TokenHolder.Quantity) / Math.pow(10, c.dec)})) : [];
                 }
                 fill.style.width = '100%';
+                console.log('持有人数据:', holders.length);
 
-                // 显示表格
+                // 渲染结果
                 if (holders.length && supply > 0) {
-                    let html = '<table><tr><th>地址</th><th>持仓</th><th>占比</th><th>鲸鱼</th></tr>';
-                    let top10 = 0;
+                    let html = '<table><tr><th>地址</th><th>持仓</th><th>占比</th><th>鲸鱼 (>1%)</th></tr>';
+                    let top10Sum = 0;
                     holders.slice(0,10).forEach(h => {
                         const pct = (h.b / supply * 100).toFixed(2);
-                        top10 += h.b;
+                        top10Sum += h.b;
                         const whale = parseFloat(pct) > 1;
                         html += `<tr class="${whale?'whale':''}"><td><a href="https://${c.scan}/address/${h.a}" target="_blank">${h.a.slice(0,6)}...${h.a.slice(-4)}</a></td><td>${h.b.toFixed(0)}</td><td>${pct}%</td><td>${whale?'Yes':''}</td></tr>`;
                     });
                     html += '</table>';
                     res.innerHTML = html;
 
-                    const ratio = (top10 / supply * 100).toFixed(2);
+                    const ratio = (top10Sum / supply * 100).toFixed(2);
                     if (ratio > 50) {
                         risk.innerHTML = `⚠️ 前10持仓 ${ratio}% - 高风险！`;
                         risk.style.display = 'block';
                     }
+                    console.log('结果渲染完成');
                 } else {
-                    res.innerHTML = '无数据';
+                    res.innerHTML = supply > 0 ? '无持有人数据' : '无效供应量';
                 }
             } catch (e) {
-                err.textContent = '加载失败: ' + e.message;
+                console.error('错误详情:', e);
+                err.textContent = `加载失败: ${e.message} (检查Console日志)`;
                 err.style.display = 'block';
+                res.innerHTML = '加载出错，请重试';
             }
             done();
 
             function done() {
-                load.style.display = 'none'; bar.style.display = 'none'; document.getElementById('btn').disabled = false;
+                load.style.display = 'none'; bar.style.display = 'none'; btn.disabled = false;
+                console.log('分析结束');
             }
         };
     </script>
