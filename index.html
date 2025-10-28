@@ -3,157 +3,126 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>LIVIA 分析平台 移动版</title>
-    <meta name="description" content="LIVIA DeFi 分析，支持 BSC/ETH/Solana">
-    <meta name="theme-color" content="#0af">
+    <title>LIVIA 分析平台</title>
     <style>
-        body { background: #111; color: #fff; font-family: Arial, sans-serif; margin: 0; padding: 8px; font-size: 14px; }
-        .container { max-width: 100%; padding: 8px; }
-        h2 { margin: 8px 0; font-size: 16px; }
-        table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        th, td { border: 1px solid #555; padding: 4px; text-align: center; }
-        th { background: #222; }
-        .whale { background: #ff0; color: #000; }
-        .red { color: #f00; }
-        .green { color: #0f0; }
-        input, select, button { width: 100%; padding: 6px; margin: 4px 0; border: 1px solid #555; border-radius: 4px; font-size: 12px; background: #111; color: #fff; box-sizing: border-box; }
-        button { background: #0af; cursor: pointer; }
-        .error { color: #f00; font-size: 12px; padding: 4px; }
-        #loading { display: none; text-align: center; color: #0af; font-size: 12px; }
-        #progressBar { background: #222; height: 4px; border-radius: 2px; margin: 4px 0; overflow: hidden; }
-        #progressFill { background: #0af; height: 100%; width: 0%; transition: width .3s; }
-        .chart-container { width: 100%; height: 100px; margin: 8px 0; position: relative; background: #222; border-radius: 4px; }
-        .chart-export { position: absolute; top: 4px; right: 4px; background: #0af; color: #111; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; border: none; }
-        #riskWarning { color: #f00; font-size: 12px; margin: 8px 0; padding: 4px; background: rgba(255,0,0,0.1); border-radius: 4px; }
-        @media (max-width: 600px) { table { font-size: 10px; } .chart-container { height: 80px; } }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { background:#111; color:#fff; font-family:Arial; padding:12px; font-size:14px; }
+        h2 { margin:10px 0; font-size:18px; }
+        select, input, button { width:100%; padding:10px; margin:8px 0; border:1px solid #555; border-radius:6px; background:#222; color:#fff; font-size:14px; }
+        button { background:#0af; font-weight:bold; cursor:pointer; }
+        button:disabled { background:#555; }
+        .error { color:#f66; background:#300; padding:8px; border-radius:6px; margin:8px 0; display:none; }
+        #loading, #progressBar, #riskWarning { display:none; margin:8px 0; }
+        #progressBar { height:6px; background:#333; border-radius:3px; overflow:hidden; }
+        #progressFill { height:100%; width:0%; background:#0af; transition:width .3s; }
+        table { width:100%; border-collapse:collapse; margin:10px 0; font-size:12px; }
+        th, td { border:1px solid #555; padding:6px; text-align:center; }
+        th { background:#222; }
+        .whale { background:#ff0; color:#000; }
+        .red { color:#f66; } .green { color:#0f0; }
     </style>
 </head>
 <body>
-    <div id="root">初始化中... (F12检查Console)</div>
+    <h2>LIVIA 分析平台</h2>
+    <select id="chain">
+        <option value="BSC">BSC</option>
+        <option value="ETH">ETH</option>
+        <option value="Solana">Solana</option>
+    </select>
+    <input id="address" placeholder="合约地址 (如 0x55d398...)">
+    <input id="apikey" placeholder="API Key (Solana 可留空)" type="password">
+    <button id="btn">🚀 分析</button>
+
+    <div id="error" class="error"></div>
+    <div id="loading">分析中...</div>
+    <div id="progressBar"><div id="progressFill"></div></div>
+    <div id="riskWarning"></div>
+    <div id="result"></div>
+
     <script>
-        console.log('LIVIA v2.0 启动');
-        // 简化状态管理：用全局对象，避免数组bug
-        const state = {
-            chain: 'BSC',
-            tokenAddress: '',
-            apiKey: '',
-            error: '',
-            loading: false,
-            holders: [],
-            totalSupply: 0,
-            riskWarning: ''
-        };
-        let renderTimeout = null;
-
-        const setState = (newState) => {
-            Object.assign(state, newState);
-            if (renderTimeout) clearTimeout(renderTimeout);
-            renderTimeout = setTimeout(render, 0);
-            console.log('状态更新:', newState);
+        const CFG = {
+            BSC: { base: "https://api.bscscan.com/api", dec:18, scan:"bscscan.com" },
+            ETH: { base: "https://api.etherscan.io/api", dec:18, scan:"etherscan.io" },
+            Solana: { base: "https://public-api.solscan.io", dec:9, scan:"solscan.io" }
         };
 
-        const CHAIN_CONFIG = {
-            BSC: { apiBase: "https://api.bscscan.com/api", decimals: 18, scan: "bscscan.com", holderEndpoint: "?module=token&action=tokenholderlist&contractaddress=", supplyEndpoint: "?module=stats&action=tokensupply&contractaddress=" },
-            ETH: { apiBase: "https://api.etherscan.io/api", decimals: 18, scan: "etherscan.io", holderEndpoint: "?module=token&action=tokenholderlist&contractaddress=", supplyEndpoint: "?module=stats&action=tokensupply&contractaddress=" },
-            Solana: { apiBase: "https://public-api.solscan.io", decimals: 9, scan: "solscan.io", holderEndpoint: "/token/holders?tokenAddress=", supplyEndpoint: "/token/meta?tokenAddress=" }
-        };
+        document.getElementById('btn').onclick = async () => {
+            const chain = document.getElementById('chain').value;
+            const addr = document.getElementById('address').value.trim();
+            const key = document.getElementById('apikey').value.trim();
+            const err = document.getElementById('error');
+            const load = document.getElementById('loading');
+            const bar = document.getElementById('progressBar');
+            const fill = document.getElementById('progressFill');
+            const risk = document.getElementById('riskWarning');
+            const res = document.getElementById('result');
 
-        window.loadData = async () => {
-            console.log('loadData调用 - 输入:', { chain: state.chain, tokenAddress: state.tokenAddress, apiKey: state.apiKey });
-            if (!state.tokenAddress || (state.chain !== "Solana" && !state.apiKey)) {
-                setState({ error: "请输入地址和API Key (Solana可选)" });
-                return;
-            }
-            if (state.chain !== "Solana" && !/^0x[a-fA-F0-9]{40}$/.test(state.tokenAddress)) {
-                setState({ error: "无效合约地址" });
-                return;
-            }
-            setState({ loading: true, error: '', holders: [], riskWarning: '' });
+            err.style.display = 'none'; risk.style.display = 'none'; load.style.display = 'block'; bar.style.display = 'block'; fill.style.width = '10%';
+            res.innerHTML = '获取中...'; document.getElementById('btn').disabled = true;
+
+            if (!addr) { err.textContent = '请输入地址'; err.style.display = 'block'; done(); return; }
+            if (chain !== 'Solana' && !key) { err.textContent = '请输入 API Key'; err.style.display = 'block'; done(); return; }
+
             try {
-                const config = CHAIN_CONFIG[state.chain];
+                const c = CFG[chain];
                 let supply = 0;
-                // 获取供应量
-                console.log('请求供应量...');
-                if (state.chain === "Solana") {
-                    const res = await fetch(`${config.apiBase}${config.supplyEndpoint}${state.tokenAddress}`);
-                    const data = await res.json();
-                    supply = data.data ? parseFloat(data.data.supply) / Math.pow(10, config.decimals) : 0;
+
+                // 获取总供应
+                if (chain === 'Solana') {
+                    const r = await fetch(`${c.base}/token/meta?tokenAddress=${addr}`);
+                    const d = await r.json();
+                    supply = d.data ? d.data.supply / (10 ** c.dec) : 0;
                 } else {
-                    const res = await fetch(`${config.apiBase}${config.supplyEndpoint}${state.tokenAddress}&apikey=${state.apiKey}`);
-                    const data = await res.json();
-                    supply = data.status === "1" ? parseFloat(data.result) / Math.pow(10, config.decimals) : 0;
+                    const r = await fetch(`${c.base}?module=stats&action=tokensupply&contractaddress=${addr}&apikey=${key}`);
+                    const d = await r.json();
+                    supply = d.status === '1' ? d.result / (10 ** c.dec) : 0;
                 }
-                setState({ totalSupply: supply });
-                // 获取持有人（前10）
-                console.log('请求持有人...');
-                let holdersData = [];
-                if (state.chain === "Solana") {
-                    const res = await fetch(`${config.apiBase}${config.holderEndpoint}${state.tokenAddress}&offset=0&limit=10`);
-                    const data = await res.json();
-                    holdersData = data.data ? data.data.map(h => ({ address: h.owner, balance: parseFloat(h.amount || 0) / Math.pow(10, config.decimals) })) : [];
+                fill.style.width = '50%';
+
+                // 获取前10持有人
+                let holders = [];
+                if (chain === 'Solana') {
+                    const r = await fetch(`${c.base}/token/holders?tokenAddress=${addr}&offset=0&limit=10`);
+                    const d = await r.json();
+                    holders = d.data ? d.data.map(h => ({a: h.owner, b: h.amount / (10 ** c.dec)})) : [];
                 } else {
-                    const res = await fetch(`${config.apiBase}${config.holderEndpoint}${state.tokenAddress}&page=1&offset=1&limit=10&apikey=${state.apiKey}`);
-                    const data = await res.json();
-                    holdersData = data.status === "1" && data.result ? data.result.map(h => ({ address: h.TokenHolder.Address, balance: parseFloat(h.TokenHolder.Quantity || 0) / Math.pow(10, config.decimals) })) : [];
+                    const r = await fetch(`${c.base}?module=token&action=tokenholderlist&contractaddress=${addr}&page=1&offset=10&apikey=${key}`);
+                    const d = await r.json();
+                    holders = d.status === '1' ? d.result.map(h => ({a: h.TokenHolderAddress, b: parseInt(h.Value) / (10 ** c.dec)})) : [];
                 }
-                const topHolders = holdersData.sort((a, b) => b.balance - a.balance).slice(0, 10);
-                setState({ holders: topHolders });
-                // 风险计算
-                if (topHolders.length && supply > 0) {
-                    const ratio = topHolders.reduce((sum, h) => sum + h.balance, 0) / supply * 100;
-                    if (ratio > 50) setState({ riskWarning: `前10地址持仓占比 ${ratio.toFixed(2)}%，过高，可能为貔貅盘` });
+                fill.style.width = '100%';
+
+                // 显示表格
+                if (holders.length && supply > 0) {
+                    let html = '<table><tr><th>地址</th><th>持仓</th><th>占比</th><th>鲸鱼</th></tr>';
+                    let top10 = 0;
+                    holders.slice(0,10).forEach(h => {
+                        const pct = (h.b / supply * 100).toFixed(2);
+                        top10 += h.b;
+                        const whale = parseFloat(pct) > 1;
+                        html += `<tr class="${whale?'whale':''}"><td><a href="https://${c.scan}/address/${h.a}" target="_blank">${h.a.slice(0,6)}...${h.a.slice(-4)}</a></td><td>${h.b.toFixed(0)}</td><td>${pct}%</td><td>${whale?'Yes':''}</td></tr>`;
+                    });
+                    html += '</table>';
+                    res.innerHTML = html;
+
+                    const ratio = (top10 / supply * 100).toFixed(2);
+                    if (ratio > 50) {
+                        risk.innerHTML = `⚠️ 前10持仓 ${ratio}% - 高风险！`;
+                        risk.style.display = 'block';
+                    }
+                } else {
+                    res.innerHTML = '无数据';
                 }
-                const progressFill = document.getElementById('progressFill');
-                if (progressFill) progressFill.style.width = '100%';
-                console.log('数据加载完成');
-            } catch (err) {
-                console.error('加载错误:', err);
-                setState({ error: `加载失败: ${err.message}` });
-            } finally {
-                setState({ loading: false });
+            } catch (e) {
+                err.textContent = '加载失败: ' + e.message;
+                err.style.display = 'block';
+            }
+            done();
+
+            function done() {
+                load.style.display = 'none'; bar.style.display = 'none'; document.getElementById('btn').disabled = false;
             }
         };
-
-        const App = () => {
-            const holdersTable = state.holders.length ? 
-                `<table><thead><tr><th>地址</th><th>持仓</th><th>占比</th><th>鲸鱼 (>1%)</th><th>风险</th></tr></thead><tbody>${
-                    state.holders.map(h => {
-                        const pct = state.totalSupply > 0 ? (h.balance / state.totalSupply * 100).toFixed(2) : '0.00';
-                        const isWhale = parseFloat(pct) > 1;
-                        const risk = parseFloat(pct) > 50 ? '高' : '低';
-                        return `<tr class="${isWhale ? 'whale' : ''}"><td><a href="https://${CHAIN_CONFIG[state.chain].scan}/address/${h.address}" target="_blank" rel="noopener">${h.address.slice(0,6)}...${h.address.slice(-4)}</a></td><td>${h.balance.toFixed(0)}</td><td>${pct}%</td><td>${isWhale ? 'Yes' : 'No'}</td><td class="${risk === '高' ? 'red' : 'green'}">${risk}</td></tr>`;
-                    }).join('')
-                }</tbody></table>` : '<p style="text-align:center; color:#ccc;">加载数据后显示持有人</p>';
-
-            return `<div class="container">
-                <h2>LIVIA 分析平台 移动版</h2>
-                <select id="chainSelect" onchange="setState({chain: this.value})">
-                    ${Object.keys(CHAIN_CONFIG).map(c => `<option ${c === state.chain ? 'selected' : ''}>${c}</option>`).join('')}
-                </select>
-                <input id="tokenInput" placeholder="合约地址 (e.g. 0x55d398326f99059fF775485246999027B3197955)" value="${state.tokenAddress}" oninput="setState({tokenAddress: this.value})" onpaste="setTimeout(() => setState({tokenAddress: this.value}), 0)">
-                <input id="apiKeyInput" placeholder="API Key (bscscan.com/apis免费，Solana可选)" type="password" value="${state.apiKey}" oninput="setState({apiKey: this.value})" onpaste="setTimeout(() => setState({apiKey: this.value}), 0)">
-                <button onclick="loadData()" ${state.loading ? 'disabled' : ''}>${state.loading ? '加载中...' : '🚀 分析'}</button>
-                ${state.error ? `<div class="error">${state.error}</div>` : ''}
-                ${state.loading ? '<div id="loading">分析中...</div><div id="progressBar"><div id="progressFill" style="width:60%"></div></div>' : ''}
-                ${state.riskWarning ? `<div id="riskWarning">${state.riskWarning}</div>` : ''}
-                ${holdersTable}
-                <div class="chart-container"><canvas id="priceChart" width="300" height="100"></canvas><button class="chart-export" onclick="alert('导出功能开发中')">📊 导出图表</button></div>
-            </div>`;
-        };
-
-        const render = () => {
-            try {
-                const html = App();
-                document.getElementById('root').innerHTML = html;
-                console.log('渲染成功 - 状态:', state);
-            } catch (err) {
-                console.error('渲染失败:', err);
-                document.getElementById('root').innerHTML = `<div class="error">渲染错误: ${err.message} (F12查看详情)</div>`;
-            }
-        };
-
-        // 初始渲染
-        render();
     </script>
 </body>
 </html>
