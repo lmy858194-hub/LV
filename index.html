@@ -99,28 +99,6 @@
             cursor: pointer;
             font-size: 12px;
         }
-        #txModal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,.95);
-            display: none;
-            overflow: auto;
-            z-index: 9999;
-            padding: 8px;
-        }
-        #closeBtn {
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            background: #f00;
-            color: #fff;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-        }
         #riskWarning {
             color: #f00;
             font-size: 12px;
@@ -134,58 +112,53 @@
                 height: 80px;
             }
         }
+        /* 防黑屏：加fallback文本 */
+        .fallback {
+            text-align: center;
+            color: #0af;
+            padding: 20px;
+        }
     </style>
 </head>
 <body>
-    <div id="root"></div>
+    <div id="root">加载中... <div class="fallback">如果黑屏，检查控制台 (F12)</div></div>
     <script>
         (function() {
             let renderTimeout = null;
-            const e = [];
+            const e = [];  // 全局状态数组
             let t = 0;
-            window.useState = e => {
-                if (!e[t]) e[t] = [undefined, null];
+            window.useState = (initVal) => {
+                if (typeof e[t] === 'undefined') {
+                    e[t] = [initVal, null];  // 修复：确保数组初始化
+                }
                 const n = t++;
-                return [e[n][0], r => {
-                    if (e[n][0] !== r) {
-                        e[n][0] = r;
+                return [e[n][0], (newVal) => {
+                    if (e[n][0] !== newVal) {
+                        e[n][0] = newVal;
                         if (renderTimeout) clearTimeout(renderTimeout);
-                        renderTimeout = setTimeout(render, 0);  // 延迟渲染，避免输入时频繁重绘
+                        renderTimeout = setTimeout(() => { render(); console.log('Re-render triggered'); }, 10);  // 加延迟+log调试
                     }
                 }];
             };
-            window.useEffect = e => e();
+            window.useEffect = (fn) => { if (fn) fn(); };
             window.render = () => {
-                t = 0;
-                document.getElementById("root").innerHTML = App();
+                t = 0;  // 重置索引
+                try {
+                    const html = App();
+                    document.getElementById("root").innerHTML = html || '<div class="fallback">渲染失败，检查JS错误</div>';  // 防空fallback
+                    console.log('Render complete:', html ? 'Success' : 'Fallback');
+                } catch (err) {
+                    console.error('Render error:', err);
+                    document.getElementById("root").innerHTML = `<div class="error">渲染错误: ${err.message}</div>`;
+                }
             };
         })();
     </script>
     <script>
         const CHAIN_CONFIG = {
-            BSC: {
-                provider: "https://bsc-dataseed1.binance.org",
-                apiBase: "https://api.bscscan.com/api",
-                decimals: 18,
-                scan: "bscscan.com",
-                holderEndpoint: "?module=token&action=tokenholderlist&contractaddress=",
-                supplyEndpoint: "?module=stats&action=tokensupply&contractaddress="
-            },
-            ETH: {
-                provider: "https://eth.llamarpc.com",
-                apiBase: "https://api.etherscan.com/api",
-                decimals: 18,
-                scan: "etherscan.io",
-                holderEndpoint: "?module=token&action=tokenholderlist&contractaddress=",
-                supplyEndpoint: "?module=stats&action=tokensupply&contractaddress="
-            },
-            Solana: {
-                apiBase: "https://public-api.solscan.io",  // 使用 public API
-                decimals: 9,
-                scan: "solscan.io",
-                holderEndpoint: "/token/holders?tokenAddress=",
-                supplyEndpoint: "/token/meta?tokenAddress="
-            }
+            BSC: { apiBase: "https://api.bscscan.com/api", decimals: 18, scan: "bscscan.com", holderEndpoint: "?module=token&action=tokenholderlist&contractaddress=", supplyEndpoint: "?module=stats&action=tokensupply&contractaddress=" },
+            ETH: { apiBase: "https://api.etherscan.io/api", decimals: 18, scan: "etherscan.io", holderEndpoint: "?module=token&action=tokenholderlist&contractaddress=", supplyEndpoint: "?module=stats&action=tokensupply&contractaddress=" },
+            Solana: { apiBase: "https://public-api.solscan.io", decimals: 9, scan: "solscan.io", holderEndpoint: "/token/holders?tokenAddress=", supplyEndpoint: "/token/meta?tokenAddress=" }
         };
 
         const App = () => {
@@ -199,94 +172,41 @@
             const [riskWarning, setRiskWarning] = useState("");
 
             const loadData = async () => {
-                if (!tokenAddress || !apiKey) {
-                    setError("请输入地址和API Key");
-                    return;
-                }
-                if (!window.ethers.utils.isAddress(tokenAddress)) {
-                    setError("无效的合约地址");
-                    return;
-                }
-                setLoading(true);
-                setError("");
-                setHolders([]);
-                setRiskWarning("");
+                if (!tokenAddress || (chain !== "Solana" && !apiKey)) { setError("请输入地址和API Key (Solana可选)"); return; }
+                if (chain !== "Solana" && !/^0x[a-fA-F0-9]{40}$/.test(tokenAddress)) { setError("无效地址"); return; }
+                setLoading(true); setError(""); setHolders([]); setRiskWarning("");
                 try {
                     const config = CHAIN_CONFIG[chain];
-                    let holdersData = [];
                     let supply = 0;
-                    let decimals = config.decimals;
-
-                    // 获取总供应量
-                    let supplyUrl;
+                    // 供应量
                     if (chain === "Solana") {
-                        supplyUrl = `${config.apiBase}${config.supplyEndpoint}${tokenAddress}`;
-                        const res = await fetch(supplyUrl);
+                        const res = await fetch(`${config.apiBase}${config.supplyEndpoint}${tokenAddress}`);
                         const data = await res.json();
-                        if (data && data.data) {
-                            supply = parseFloat(data.data.supply);
-                        }
+                        supply = data.data ? parseFloat(data.data.supply) / 10 ** config.decimals : 0;
                     } else {
-                        supplyUrl = `${config.apiBase}${config.supplyEndpoint}${tokenAddress}&apikey=${apiKey}`;
-                        const res = await fetch(supplyUrl);
+                        const res = await fetch(`${config.apiBase}${config.supplyEndpoint}${tokenAddress}&apikey=${apiKey}`);
                         const data = await res.json();
-                        if (data.status === "1" && data.result) {
-                            supply = parseFloat(data.result) / Math.pow(10, decimals);
-                        }
+                        supply = data.status === "1" ? parseFloat(data.result) / 10 ** config.decimals : 0;
                     }
-
                     setTotalSupply(supply);
-
-                    // 获取持有人列表
-                    let offset = 0;
-                    const limit = 100;  // 获取前100个
-                    while (holdersData.length < limit) {
-                        let holderUrl;
-                        if (chain === "Solana") {
-                            holderUrl = `${config.apiBase}${config.holderEndpoint}${tokenAddress}&offset=${offset}&limit=${limit}`;
-                            const res = await fetch(holderUrl);
-                            const data = await res.json();
-                            if (data.data && data.data.length > 0) {
-                                holdersData = holdersData.concat(data.data.map(h => ({
-                                    address: h.owner,
-                                    balance: parseFloat(h.amount) / Math.pow(10, decimals)
-                                })));
-                                offset += data.data.length;
-                            } else {
-                                break;
-                            }
-                        } else {
-                            holderUrl = `${config.apiBase}${config.holderEndpoint}${tokenAddress}&page=1&offset=${offset + 1}&apikey=${apiKey}`;
-                            const res = await fetch(holderUrl);
-                            const data = await res.json();
-                            if (data.status === "1" && data.result && data.result.length > 0) {
-                                holdersData = holdersData.concat(data.result.map(h => ({
-                                    address: h.TokenHolder.Address,
-                                    balance: parseFloat(h.TokenHolder.Quantity) / Math.pow(10, decimals)
-                                })));
-                                offset += data.result.length;
-                            } else {
-                                break;
-                            }
-                        }
-                        if (offset >= 10000) break;  // 防止无限循环
+                    // 持有人（简化前10）
+                    let holdersData = [];
+                    if (chain === "Solana") {
+                        const res = await fetch(`${config.apiBase}${config.holderEndpoint}${tokenAddress}&offset=0&limit=10`);
+                        const data = await res.json();
+                        holdersData = data.data ? data.data.map(h => ({ address: h.owner, balance: parseFloat(h.amount) / 10 ** config.decimals })) : [];
+                    } else {
+                        const res = await fetch(`${config.apiBase}${config.holderEndpoint}${tokenAddress}&page=1&offset=1&limit=10&apikey=${apiKey}`);
+                        const data = await res.json();
+                        holdersData = data.status === "1" ? data.result.map(h => ({ address: h.TokenHolder.Address, balance: parseFloat(h.TokenHolder.Quantity) / 10 ** config.decimals })) : [];
                     }
-
-                    // 只取前10或所有，如果少于10
-                    const topHolders = holdersData.slice(0, 10).sort((a, b) => b.balance - a.balance);
+                    const topHolders = holdersData.sort((a, b) => b.balance - a.balance).slice(0, 10);
                     setHolders(topHolders);
-
-                    // 计算风险：前10持仓占比
-                    if (topHolders.length > 0 && supply > 0) {
-                        const top10Sum = topHolders.reduce((sum, h) => sum + h.balance, 0);
-                        const ratio = (top10Sum / supply * 100).toFixed(2);
-                        if (parseFloat(ratio) > 50) {
-                            setRiskWarning(`前10地址持仓占比 ${ratio}%，过高，可能为貔貅盘`);
-                        }
+                    if (topHolders.length && supply > 0) {
+                        const ratio = topHolders.reduce((sum, h) => sum + h.balance, 0) / supply * 100;
+                        if (ratio > 50) setRiskWarning(`前10占比 ${ratio.toFixed(2)}% - 风险高！`);
                     }
-
-                    // 更新进度
-                    document.getElementById("progressFill").style.width = "100%";
+                    document.getElementById("progressFill") && (document.getElementById("progressFill").style.width = "100%");
                 } catch (err) {
                     setError(`加载失败: ${err.message}`);
                 } finally {
@@ -294,100 +214,54 @@
                 }
             };
 
-            const holdersTable = holders.length ? `<table><thead><tr><th>地址</th><th>持仓</th><th>占比</th><th>鲸鱼</th><th>风险</th></tr></thead><tbody>${holders.map(e => {
-                const t = (e.balance / totalSupply * 100).toFixed(2);
-                const n = e.balance / totalSupply > 0.01;
-                const r = e.balance / totalSupply > 0.5 ? "高" : "低";
-                return `<tr class="${n ? "whale" : ""}"><td><a href="https://${CHAIN_CONFIG[chain].scan}/address/${e.address}" target="_blank">${e.address.slice(0,6)}...${e.address.slice(-4)}</a></td><td>${e.balance.toFixed(0)}</td><td>${t}%</td><td>${n ? "Yes" : ""}</td><td class="${r === "高" ? "red" : "green"}">${r}</td></tr>`;
-            }).join("")}</tbody></table>` : "";
+            const holdersTable = holders.length ? `<table><thead><tr><th>地址</th><th>持仓</th><th>占比</th><th>鲸鱼(>1%)</th><th>风险</th></tr></thead><tbody>${holders.map(h => {
+                const pct = totalSupply > 0 ? (h.balance / totalSupply * 100).toFixed(2) : 0;
+                const isWhale = parseFloat(pct) > 1;
+                const risk = parseFloat(pct) > 50 ? "高" : "低";
+                return `<tr class="${isWhale ? 'whale' : ''}"><td><a href="https://${CHAIN_CONFIG[chain].scan}/address/${h.address}" target="_blank">${h.address.slice(0,6)}...${h.address.slice(-4)}</a></td><td>${h.balance.toFixed(0)}</td><td>${pct}%</td><td>${isWhale ? 'Yes' : 'No'}</td><td class="${risk === '高' ? 'red' : 'green'}">${risk}</td></tr>`;
+            }).join('')}</tbody></table>` : '<p style="text-align:center; color:#ccc;">无数据</p>';
 
             return `<div class="container">
                 <h2>LIVIA 分析平台 移动版</h2>
-                <select id="chainSelect" onchange="setChain(this.value)">${Object.keys(CHAIN_CONFIG).map(e => `<option ${e === chain ? "selected" : ""}>${e}</option>`).join("")}</select>
-                <input id="tokenInput" placeholder="合约地址" value="${tokenAddress}">
-                <input id="apiKeyInput" placeholder="API Key (Etherscan/BscScan 需要，Solana 可选)" type="password" value="${apiKey}">
-                <button onclick="loadData()" ${loading ? "disabled" : ""}>${loading ? "加载中..." : "加载数据"}</button>
+                <select id="chainSelect">${Object.keys(CHAIN_CONFIG).map(c => `<option ${c === chain ? 'selected' : ''}>${c}</option>`).join('')}</select>
+                <input id="tokenInput" placeholder="合约地址 (e.g. 0x...)" value="${tokenAddress}">
+                <input id="apiKeyInput" placeholder="API Key" type="password" value="${apiKey}">
+                <button onclick="loadData()" ${loading ? 'disabled' : ''}>${loading ? '加载中...' : '分析'}</button>
                 <div class="error">${error}</div>
-                ${loading ? '<div id="loading">分析中...</div><div id="progressBar"><div id="progressFill" style="width:60%"></div></div>' : ""}
+                ${loading ? '<div id="loading">分析中...</div><div id="progressBar"><div id="progressFill" style="width:60%"></div></div>' : ''}
                 <div id="riskWarning">${riskWarning}</div>
                 ${holdersTable}
-                <div class="chart-container">
-                    <canvas id="priceChart"></canvas>
-                    <button class="chart-export">导出图表</button>
-                </div>
+                <div class="chart-container"><canvas id="priceChart"></canvas><button class="chart-export">导出</button></div>
             </div>`;
         };
 
-        window.setChain = e => {
-            const [, t] = useState("BSC");
-            t(e);
-        };
-        window.setTokenAddress = e => {
-            const [, t] = useState("");
-            t(e);
-        };
-        window.setApiKey = e => {
-            const [, t] = useState("");
-            t(e);
-        };
+        window.setChain = (val) => { const [, set] = useState("BSC"); set(val); };
+        window.setTokenAddress = (val) => { const [, set] = useState(""); set(val); };
+        window.setApiKey = (val) => { const [, set] = useState(""); set(val); };
+        window.ethers = { utils: { isAddress: (addr) => /^0x[a-fA-F0-9]{40}$/.test(addr) } };
+        window.Chart = () => ({ destroy: () => {} });
 
-        // 地址验证
-        window.ethers = {
-            utils: {
-                isAddress: e => /^0x[a-fA-F0-9]{40}$/.test(e)
-            }
-        };
-
-        // 假的 Chart
-        window.Chart = function() {
-            return { destroy: () => {} };
-        };
-
-        // 添加事件监听器来处理输入
         function addInputListeners() {
             const tokenInput = document.getElementById('tokenInput');
             const apiKeyInput = document.getElementById('apiKeyInput');
             const chainSelect = document.getElementById('chainSelect');
-
             if (tokenInput) {
-                tokenInput.addEventListener('input', (evt) => {
-                    setTokenAddress(evt.target.value);
-                });
-                // 允许粘贴
-                tokenInput.addEventListener('paste', (evt) => {
-                    setTimeout(() => setTokenAddress(tokenInput.value), 0);
-                });
+                tokenInput.oninput = (e) => setTokenAddress(e.target.value);
+                tokenInput.onpaste = () => setTimeout(() => setTokenAddress(tokenInput.value), 0);
             }
-
             if (apiKeyInput) {
-                apiKeyInput.addEventListener('input', (evt) => {
-                    setApiKey(evt.target.value);
-                });
-                apiKeyInput.addEventListener('paste', (evt) => {
-                    setTimeout(() => setApiKey(apiKeyInput.value), 0);
-                });
+                apiKeyInput.oninput = (e) => setApiKey(e.target.value);
+                apiKeyInput.onpaste = () => setTimeout(() => setApiKey(apiKeyInput.value), 0);
             }
-
-            if (chainSelect) {
-                chainSelect.addEventListener('change', (evt) => {
-                    setChain(evt.target.value);
-                });
-            }
+            if (chainSelect) chainSelect.onchange = (e) => setChain(e.target.value);
         }
 
-        // 在每次渲染后添加监听器
         const originalRender = window.render;
         window.render = () => {
             originalRender();
-            setTimeout(addInputListeners, 0);  // 延迟添加监听器，确保DOM就绪
+            setTimeout(addInputListeners, 50);  // 延迟绑定，避免冲突
         };
-
-        render();
-    </script>
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('data:application/javascript;base64,c2VsZi5hZGRFdmVudExpc3RlbmVyKCdpbnN0YWxsJywgZSAmJiBlLndhaXRVbml0bChjYWNoZXMub3BlbignbGl2aWEtY2FjaGUtdjEnKS50aGVuKGNhY2hlID0+IGNhY2hlLmFkZEFsbChbIi8iXSkpKSk7c2VsZi5hZGRFdmVudExpc3RlbmVyKCdmZXRjaCcsIGUgPT4gZS5yZXNwb25kV2l0aChjYWNoZXMubWF0Y2goZS5yZXF1ZXN0KS50aGVuKHJlcyA9PiByZXMgfHwgZmV0Y2goZS5yZXF1ZXN0KSkpOw==');
-        }
+        render();  // 初始渲染
     </script>
 </body>
 </html>
