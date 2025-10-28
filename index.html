@@ -4,73 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LIVIA 分析平台 移动版</title>
-    <meta name="description" content="LIVIA DeFi 分析，支持 BSC/ETH/Solana">
-    <meta name="theme-color" content="#0af">
     <style>
         body { background: #111; color: #fff; font-family: Arial, sans-serif; margin: 0; padding: 8px; font-size: 14px; }
         .container { max-width: 100%; padding: 8px; }
-        h2, h3 { margin: 8px 0; font-size: 16px; }
-        table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        th, td { border: 1px solid #555; padding: 4px; text-align: center; }
-        th { background: #222; }
-        .whale { background: #ff0; color: #000; }
-        .red { color: #f00; }
-        .green { color: #0f0; }
-        input, select, button { width: 100%; padding: 6px; margin: 4px 0; border: 1px solid #555; border-radius: 4px; font-size: 12px; background: #111; color: #fff; }
-        button { background: #0af; cursor: pointer; }
+        h2 { margin: 8px 0; font-size: 16px; }
+        button { width: 100%; padding: 12px; margin: 8px 0; background: #0af; color: #111; border: none; border-radius: 4px; font-size: 16px; }
         .error { color: #f00; font-size: 12px; }
-        #loading { display: none; text-align: center; color: #0af; font-size: 12px; }
-        #progressBar { background: #222; height: 4px; border-radius: 2px; margin: 4px 0; }
-        #progressFill { background: #0af; height: 100%; width: 0%; transition: width 0.3s; }
-        .chart-container { width: 100%; height: 100px; margin: 8px 0; position: relative; }
-        .chart-export { position: absolute; top: 4px; right: 4px; background: #0af; color: #111; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
-        #txModal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); display: none; overflow: auto; z-index: 9999; padding: 8px; }
-        #closeBtn { position: absolute; top: 8px; right: 8px; background: #f00; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
-        #riskWarning { color: #f00; font-size: 12px; margin: 8px 0; }
-        @media (max-width: 600px) { table { font-size: 10px; } .chart-container { height: 80px; } }
     </style>
 </head>
 <body>
-    <div id="root"></div>
-
-    <!-- 内联 React + ReactDOM -->
-    <script>
-    // React 18.2.0
-    !function(e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"function"==typeof define&&define.amd?define(["exports"],e):e((e="undefined"!=typeof globalThis?globalThis:e||self).React={})}(function(e){/* React 完整代码已压缩，约 40KB */;e.useState=function(e){};e.useEffect=function(){};});
-    // ReactDOM
-    !function(e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"function"==typeof define&&define.amd?define(["exports"],e):e((e="undefined"!=typeof globalThis?globalThis:e||self).ReactDOM={})}(function(e){e.render=function(e,t){t.innerHTML='<h2>LIVIA 离线版加载成功！</h2>';};});
-    </script>
-
-    <!-- 内联 ethers + Chart.js（简化测试版） -->
-    <script>
-    window.ethers = { utils: { isAddress: () => true, formatUnits: (v,d) => v / Math.pow(10,d) } };
-    window.Chart = function(){ return { destroy:()=>{} }; };
-    </script>
-
-    <!-- 你的 App 代码（简化测试版） -->
-    <script type="module">
-        const { useState } = React;
-        const { render } = ReactDOM;
-
-        const App = () => {
-            const [msg, setMsg] = useState('点击按钮测试');
-            return `
-                <div class="container">
-                    <h2>LIVIA 分析平台 移动版（离线测试）</h2>
-                    <button onclick="alert('LIVIA 正常运行！')">点我测试</button>
-                    <p style="color:#0f0">如果看到这个，说明部署成功！</p>
-                </div>
-            `;
-        };
-
-        render(App(), document.getElementById('root'));
-    </script>
-
-    <!-- PWA 支持 -->
-    <script>
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('data:application/javascript;base64,c2VsZi5hZGRFdmVudExpc3RlbmVyKCdpbnN0YWxsJywgZSAmJiBlLndhaXRVbml0bChjYWNoZXMub3BlbignbGl2aWEtY2FjaGUtdjEnKS50aGVuKGNhY2hlID0+IGNhY2hlLmFkZEFsbChbIi8iXSkpKSk7c2VsZi5hZGRFdmVudExpc3RlbmVyKCdmZXRjaCcsIGUgPT4gZS5yZXNwb25kV2l0aChjYWNoZXMubWF0Y2goZS5yZXF1ZXN0KS50aGVuKHJlcyA9PiByZXMgfHwgZmV0Y2goZS5yZXF1ZXN0KSkpOw==');
-    }
-    </script>
+    <div class="container">
+        <h2>LIVIA 分析平台 移动版（测试成功）</h2>
+        <p style="color:#0f0;">✅ 部署成功！代码加载正常。</p>
+        <button onclick="alert('LIVIA 正常运行！\n\n下一步：添加完整功能代码。')">点我测试</button>
+        <p>下一步：用完整代码替换，启用多链分析、图表、貔貅盘检测。</p>
+    </div>
 </body>
 </html>
