@@ -7,154 +7,57 @@
     <meta name="description" content="LIVIA DeFi 分析，支持 BSC/ETH/Solana">
     <meta name="theme-color" content="#0af">
     <style>
-        body {
-            background: #111;
-            color: #fff;
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 8px;
-            font-size: 14px;
-        }
-        .container {
-            max-width: 100%;
-            padding: 8px;
-        }
-        h2, h3 {
-            margin: 8px 0;
-            font-size: 16px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 12px;
-        }
-        th, td {
-            border: 1px solid #555;
-            padding: 4px;
-            text-align: center;
-        }
-        th {
-            background: #222;
-        }
-        .whale {
-            background: #ff0;
-            color: #000;
-        }
-        .red {
-            color: #f00;
-        }
-        .green {
-            color: #0f0;
-        }
-        input, select, button {
-            width: 100%;
-            padding: 6px;
-            margin: 4px 0;
-            border: 1px solid #555;
-            border-radius: 4px;
-            font-size: 12px;
-            background: #111;
-            color: #fff;
-        }
-        button {
-            background: #0af;
-            cursor: pointer;
-        }
-        .error {
-            color: #f00;
-            font-size: 12px;
-        }
-        #loading {
-            display: none;
-            text-align: center;
-            color: #0af;
-            font-size: 12px;
-        }
-        #progressBar {
-            background: #222;
-            height: 4px;
-            border-radius: 2px;
-            margin: 4px 0;
-        }
-        #progressFill {
-            background: #0af;
-            height: 100%;
-            width: 0%;
-            transition: width .3s;
-        }
-        .chart-container {
-            width: 100%;
-            height: 100px;
-            margin: 8px 0;
-            position: relative;
-        }
-        .chart-export {
-            position: absolute;
-            top: 4px;
-            right: 4px;
-            background: #0af;
-            color: #111;
-            padding: 4px 8px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 12px;
-        }
-        #riskWarning {
-            color: #f00;
-            font-size: 12px;
-            margin: 8px 0;
-        }
-        @media (max-width: 600px) {
-            table {
-                font-size: 10px;
-            }
-            .chart-container {
-                height: 80px;
-            }
-        }
-        /* 防黑屏：加fallback文本 */
-        .fallback {
-            text-align: center;
-            color: #0af;
-            padding: 20px;
-        }
+        body { background: #111; color: #fff; font-family: Arial, sans-serif; margin: 0; padding: 8px; font-size: 14px; }
+        .container { max-width: 100%; padding: 8px; }
+        h2 { margin: 8px 0; font-size: 16px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { border: 1px solid #555; padding: 4px; text-align: center; }
+        th { background: #222; }
+        .whale { background: #ff0; color: #000; }
+        .red { color: #f00; }
+        .green { color: #0f0; }
+        input, select, button { width: 100%; padding: 6px; margin: 4px 0; border: 1px solid #555; border-radius: 4px; font-size: 12px; background: #111; color: #fff; }
+        button { background: #0af; cursor: pointer; }
+        .error { color: #f00; font-size: 12px; }
+        #loading { display: none; text-align: center; color: #0af; font-size: 12px; }
+        #progressBar { background: #222; height: 4px; border-radius: 2px; margin: 4px 0; }
+        #progressFill { background: #0af; height: 100%; width: 0%; transition: width .3s; }
+        .chart-container { width: 100%; height: 100px; margin: 8px 0; position: relative; }
+        .chart-export { position: absolute; top: 4px; right: 4px; background: #0af; color: #111; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        #riskWarning { color: #f00; font-size: 12px; margin: 8px 0; }
+        @media (max-width: 600px) { table { font-size: 10px; } .chart-container { height: 80px; } }
     </style>
 </head>
 <body>
-    <div id="root">加载中... <div class="fallback">如果黑屏，检查控制台 (F12)</div></div>
+    <div id="root">调试模式：打开F12看Console日志</div>
     <script>
-        (function() {
-            let renderTimeout = null;
-            const e = [];  // 全局状态数组
-            let t = 0;
-            window.useState = (initVal) => {
-                if (typeof e[t] === 'undefined') {
-                    e[t] = [initVal, null];  // 修复：确保数组初始化
+        console.log('LIVIA启动 - 检查控制台');
+        let renderTimeout = null;
+        const stateArray = []; let stateIndex = 0;
+        const useState = (initVal) => {
+            if (typeof stateArray[stateIndex] === 'undefined') stateArray[stateIndex] = [initVal];
+            const idx = stateIndex++;
+            return [stateArray[idx][0], (newVal) => {
+                if (stateArray[idx][0] !== newVal) {
+                    stateArray[idx][0] = newVal;
+                    if (renderTimeout) clearTimeout(renderTimeout);
+                    renderTimeout = setTimeout(render, 50);
                 }
-                const n = t++;
-                return [e[n][0], (newVal) => {
-                    if (e[n][0] !== newVal) {
-                        e[n][0] = newVal;
-                        if (renderTimeout) clearTimeout(renderTimeout);
-                        renderTimeout = setTimeout(() => { render(); console.log('Re-render triggered'); }, 10);  // 加延迟+log调试
-                    }
-                }];
-            };
-            window.useEffect = (fn) => { if (fn) fn(); };
-            window.render = () => {
-                t = 0;  // 重置索引
-                try {
-                    const html = App();
-                    document.getElementById("root").innerHTML = html || '<div class="fallback">渲染失败，检查JS错误</div>';  // 防空fallback
-                    console.log('Render complete:', html ? 'Success' : 'Fallback');
-                } catch (err) {
-                    console.error('Render error:', err);
-                    document.getElementById("root").innerHTML = `<div class="error">渲染错误: ${err.message}</div>`;
-                }
-            };
-        })();
-    </script>
-    <script>
+            }];
+        };
+        const render = () => {
+            stateIndex = 0;
+            try {
+                const html = App();
+                document.getElementById("root").innerHTML = html || '<div style="color:#0af;">渲染失败 - 检查Console</div>';
+                console.log('渲染完成');
+                bindEvents();  // 每次渲染后重绑事件
+            } catch (err) {
+                console.error('渲染错误:', err);
+                document.getElementById("root").innerHTML = `<div class="error">错误: ${err.message}</div>`;
+            }
+        };
+
         const CHAIN_CONFIG = {
             BSC: { apiBase: "https://api.bscscan.com/api", decimals: 18, scan: "bscscan.com", holderEndpoint: "?module=token&action=tokenholderlist&contractaddress=", supplyEndpoint: "?module=stats&action=tokensupply&contractaddress=" },
             ETH: { apiBase: "https://api.etherscan.io/api", decimals: 18, scan: "etherscan.io", holderEndpoint: "?module=token&action=tokenholderlist&contractaddress=", supplyEndpoint: "?module=stats&action=tokensupply&contractaddress=" },
@@ -171,14 +74,25 @@
             const [totalSupply, setTotalSupply] = useState(0);
             const [riskWarning, setRiskWarning] = useState("");
 
-            const loadData = async () => {
-                if (!tokenAddress || (chain !== "Solana" && !apiKey)) { setError("请输入地址和API Key (Solana可选)"); return; }
-                if (chain !== "Solana" && !/^0x[a-fA-F0-9]{40}$/.test(tokenAddress)) { setError("无效地址"); return; }
+            window.loadData = async () => {  // 全局定义，确保onclick能调用
+                console.log('loadData触发 - 地址:', tokenAddress, '链:', chain);
+                if (!tokenAddress || (chain !== "Solana" && !apiKey)) { 
+                    setError("请输入地址和API Key (Solana可选)"); 
+                    console.log('错误: 缺少输入'); 
+                    return; 
+                }
+                if (chain !== "Solana" && !/^0x[a-fA-F0-9]{40}$/.test(tokenAddress)) { 
+                    setError("无效地址"); 
+                    console.log('错误: 无效地址'); 
+                    return; 
+                }
                 setLoading(true); setError(""); setHolders([]); setRiskWarning("");
+                console.log('开始加载...');
                 try {
                     const config = CHAIN_CONFIG[chain];
                     let supply = 0;
-                    // 供应量
+                    // 供应
+                    console.log('获取供应...');
                     if (chain === "Solana") {
                         const res = await fetch(`${config.apiBase}${config.supplyEndpoint}${tokenAddress}`);
                         const data = await res.json();
@@ -189,25 +103,31 @@
                         supply = data.status === "1" ? parseFloat(data.result) / 10 ** config.decimals : 0;
                     }
                     setTotalSupply(supply);
-                    // 持有人（简化前10）
+                    console.log('供应获取:', supply);
+                    // 持有人
+                    console.log('获取持有人...');
                     let holdersData = [];
                     if (chain === "Solana") {
                         const res = await fetch(`${config.apiBase}${config.holderEndpoint}${tokenAddress}&offset=0&limit=10`);
                         const data = await res.json();
-                        holdersData = data.data ? data.data.map(h => ({ address: h.owner, balance: parseFloat(h.amount) / 10 ** config.decimals })) : [];
+                        holdersData = data.data ? data.data.map(h => ({ address: h.owner, balance: parseFloat(h.amount || 0) / 10 ** config.decimals })) : [];
                     } else {
                         const res = await fetch(`${config.apiBase}${config.holderEndpoint}${tokenAddress}&page=1&offset=1&limit=10&apikey=${apiKey}`);
                         const data = await res.json();
-                        holdersData = data.status === "1" ? data.result.map(h => ({ address: h.TokenHolder.Address, balance: parseFloat(h.TokenHolder.Quantity) / 10 ** config.decimals })) : [];
+                        holdersData = data.status === "1" && data.result ? data.result.map(h => ({ address: h.TokenHolder.Address, balance: parseFloat(h.TokenHolder.Quantity || 0) / 10 ** config.decimals })) : [];
                     }
                     const topHolders = holdersData.sort((a, b) => b.balance - a.balance).slice(0, 10);
                     setHolders(topHolders);
+                    console.log('持有人获取:', topHolders.length);
                     if (topHolders.length && supply > 0) {
                         const ratio = topHolders.reduce((sum, h) => sum + h.balance, 0) / supply * 100;
                         if (ratio > 50) setRiskWarning(`前10占比 ${ratio.toFixed(2)}% - 风险高！`);
                     }
-                    document.getElementById("progressFill") && (document.getElementById("progressFill").style.width = "100%");
+                    const progressFill = document.getElementById("progressFill");
+                    if (progressFill) progressFill.style.width = "100%";
+                    console.log('加载完成');
                 } catch (err) {
+                    console.error('加载错误:', err);
                     setError(`加载失败: ${err.message}`);
                 } finally {
                     setLoading(false);
@@ -219,14 +139,14 @@
                 const isWhale = parseFloat(pct) > 1;
                 const risk = parseFloat(pct) > 50 ? "高" : "低";
                 return `<tr class="${isWhale ? 'whale' : ''}"><td><a href="https://${CHAIN_CONFIG[chain].scan}/address/${h.address}" target="_blank">${h.address.slice(0,6)}...${h.address.slice(-4)}</a></td><td>${h.balance.toFixed(0)}</td><td>${pct}%</td><td>${isWhale ? 'Yes' : 'No'}</td><td class="${risk === '高' ? 'red' : 'green'}">${risk}</td></tr>`;
-            }).join('')}</tbody></table>` : '<p style="text-align:center; color:#ccc;">无数据</p>';
+            }).join('')}</tbody></table>` : '<p style="text-align:center; color:#ccc;">无数据 - 点击分析试试</p>';
 
             return `<div class="container">
                 <h2>LIVIA 分析平台 移动版</h2>
                 <select id="chainSelect">${Object.keys(CHAIN_CONFIG).map(c => `<option ${c === chain ? 'selected' : ''}>${c}</option>`).join('')}</select>
-                <input id="tokenInput" placeholder="合约地址 (e.g. 0x...)" value="${tokenAddress}">
-                <input id="apiKeyInput" placeholder="API Key" type="password" value="${apiKey}">
-                <button onclick="loadData()" ${loading ? 'disabled' : ''}>${loading ? '加载中...' : '分析'}</button>
+                <input id="tokenInput" placeholder="合约地址 (e.g. 0x55d398326f99059fF775485246999027B3197955)" value="${tokenAddress}">
+                <input id="apiKeyInput" placeholder="API Key (bscscan.com/apis免费)" type="password" value="${apiKey}">
+                <button id="analyzeBtn" ${loading ? 'disabled' : ''}>${loading ? '加载中...' : '分析'}</button>
                 <div class="error">${error}</div>
                 ${loading ? '<div id="loading">分析中...</div><div id="progressBar"><div id="progressFill" style="width:60%"></div></div>' : ''}
                 <div id="riskWarning">${riskWarning}</div>
@@ -235,33 +155,31 @@
             </div>`;
         };
 
-        window.setChain = (val) => { const [, set] = useState("BSC"); set(val); };
-        window.setTokenAddress = (val) => { const [, set] = useState(""); set(val); };
-        window.setApiKey = (val) => { const [, set] = useState(""); set(val); };
-        window.ethers = { utils: { isAddress: (addr) => /^0x[a-fA-F0-9]{40}$/.test(addr) } };
-        window.Chart = () => ({ destroy: () => {} });
-
-        function addInputListeners() {
+        function bindEvents() {
             const tokenInput = document.getElementById('tokenInput');
             const apiKeyInput = document.getElementById('apiKeyInput');
             const chainSelect = document.getElementById('chainSelect');
+            const analyzeBtn = document.getElementById('analyzeBtn');
             if (tokenInput) {
-                tokenInput.oninput = (e) => setTokenAddress(e.target.value);
-                tokenInput.onpaste = () => setTimeout(() => setTokenAddress(tokenInput.value), 0);
+                tokenInput.oninput = (e) => { const [, set] = useState(""); set(e.target.value); };
+                tokenInput.onpaste = () => setTimeout(() => { const [, set] = useState(""); set(tokenInput.value); }, 0);
             }
             if (apiKeyInput) {
-                apiKeyInput.oninput = (e) => setApiKey(e.target.value);
-                apiKeyInput.onpaste = () => setTimeout(() => setApiKey(apiKeyInput.value), 0);
+                apiKeyInput.oninput = (e) => { const [, set] = useState(""); set(e.target.value); };
+                apiKeyInput.onpaste = () => setTimeout(() => { const [, set] = useState(""); set(apiKeyInput.value); }, 0);
             }
-            if (chainSelect) chainSelect.onchange = (e) => setChain(e.target.value);
+            if (chainSelect) chainSelect.onchange = (e) => { const [, set] = useState("BSC"); set(e.target.value); };
+            if (analyzeBtn) {
+                analyzeBtn.onclick = () => { console.log('按钮点击'); loadData(); };  // 明确绑定
+            }
+            console.log('事件绑定完成');
         }
 
-        const originalRender = window.render;
-        window.render = () => {
-            originalRender();
-            setTimeout(addInputListeners, 50);  // 延迟绑定，避免冲突
-        };
-        render();  // 初始渲染
+        window.setChain = (val) => { const [, set] = useState("BSC"); set(val); };
+        window.setTokenAddress = (val) => { const [, set] = useState(""); set(val); };
+        window.setApiKey = (val) => { const [, set] = useState(""); set(val); };
+        render();  // 初始
+        setTimeout(bindEvents, 100);  // 初次绑定
     </script>
 </body>
 </html>
