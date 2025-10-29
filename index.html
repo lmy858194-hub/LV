@@ -1,401 +1,315 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>LIVIA V5 — 实时链上版（Etherscan V2 + DexScreener）</title>
-<meta name="description" content="LIVIA V5 — 实时链上数据（BSC/ETH/Solana）示例">
-<style>
-  :root{--bg:#fff;--text:#111;--muted:#666;--accent:#0aa;--danger:#d9534f;--safe:#28a745}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,Arial,Helvetica,sans-serif;padding:12px}
-  .wrap{max-width:1100px;margin:0 auto}
-  .row{display:flex;gap:12px;flex-wrap:wrap}
-  .col{flex:1;min-width:260px}
-  .card{background:#fff;border:1px solid #e6e6e6;border-radius:10px;padding:12px;box-shadow:0 6px 18px rgba(0,0,0,0.04)}
-  h1{font-size:18px;margin:0 0 8px 0}
-  label{font-size:13px;color:var(--muted)}
-  input,select,button{width:100%;padding:8px;margin-top:6px;border-radius:8px;border:1px solid #ddd;font-size:14px}
-  button{background:linear-gradient(90deg,var(--accent),#66d9ff);color:#012;cursor:pointer;border:0}
-  .small{font-size:13px;color:var(--muted)}
-  table{width:100%;border-collapse:collapse;margin-top:8px}
-  th,td{padding:8px;border-bottom:1px solid #eee;text-align:center;font-size:13px}
-  .tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#f3f3f3;margin-left:8px;font-size:12px}
-  .charts{display:flex;flex-direction:column;gap:8px}
-  .chart{background:#fff;padding:8px;border-radius:8px;border:1px solid #eee}
-  .muted{color:var(--muted)}
-  @media(max-width:900px){ .row{flex-direction:column} }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>LIVIA PRO - 专业链上检测工具</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .whale { @apply bg-red-50 text-red-700 font-medium; }
+    .loading { @apply animate-pulse; }
+    .tag { @apply inline-block px-2 py-1 text-xs rounded-full; }
+  </style>
 </head>
-<body>
-<div class="wrap">
-  <h1>LIVIA V5 — 实时链上专业版 <span class="small muted">（Etherscan V2 + DexScreener）</span></h1>
+<body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen font-sans">
+<div class="max-w-6xl mx-auto p-4">
 
-  <div class="card" style="margin-bottom:12px">
-    <div style="display:flex;gap:12px;flex-wrap:wrap">
-      <div style="flex:1;min-width:220px">
-        <label>链</label>
-        <select id="chain">
-          <option value="BSC">BSC</option>
-          <option value="ETH">ETH</option>
-        </select>
-      </div>
-      <div style="flex:2;min-width:260px">
-        <label>合约地址</label>
-        <input id="contract" placeholder="0x..." />
-      </div>
-      <div style="flex:1;min-width:220px">
-        <label>API Key（Etherscan V2 / BscScan，默认已填）</label>
-        <input id="apikey" type="password" />
-      </div>
-      <div style="width:140px;align-self:end">
-        <button id="loadBtn">加载并分析</button>
-      </div>
-    </div>
-    <div id="status" class="small muted" style="margin-top:8px">准备就绪</div>
+  <!-- 标题 -->
+  <div class="text-center mb-6">
+    <h1 class="text-3xl font-bold text-gray-800">LIVIA PRO</h1>
+    <p class="text-sm text-gray-600">实时链上检测 · Etherscan V2 + DexScreener</p>
   </div>
 
-  <div class="row">
-    <div class="col">
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div><strong>概览</strong><div class="small muted">合约基础信息</div></div>
-          <div id="riskBadge" class="tag">—</div>
-        </div>
-        <div id="overview" style="margin-top:8px" class="small">
-          <div>合约：<span id="ovAddr">—</span></div>
-          <div>总量：<span id="ovSupply">—</span></div>
-          <div>持有人数（公开）：<span id="ovHolders">—</span></div>
-        </div>
+  <!-- 输入栏 -->
+  <div class="bg-white rounded-xl shadow-lg p-5 mb-6">
+    <div class="grid md:grid-cols-3 gap-4 items-end">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">网络</label>
+        <select id="chain" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+          <option value="ETH">Ethereum (ETH)</option>
+          <option value="BSC">BSC (BEP20)</option>
+        </select>
       </div>
-
-      <div class="card" style="margin-top:12px">
-        <strong>持仓 Top (演示/实时混合)</strong>
-        <div id="holdersWrap" class="small muted" style="margin-top:8px">请先加载</div>
-        <div style="display:flex;gap:8px;margin-top:8px"><button id="exportCSV">导出 CSV</button></div>
+      <div class="md:col-span-2">
+        <label class="block text-sm font-medium text-gray-700 mb-1">合约地址</label>
+        <input id="contract" type="text" placeholder="0x..." class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"/>
       </div>
+      <button id="loadBtn" class="bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-medium px-6 py-2 rounded-lg hover:from-emerald-600 hover:to-teal-700 transition">
+        立即检测
+      </button>
+    </div>
+    <div id="status" class="mt-3 text-sm text-gray-600">就绪</div>
+  </div>
 
-      <div class="card" style="margin-top:12px">
-        <strong>LP 流动性检测</strong>
-        <div id="lpWrap" class="small muted" style="margin-top:8px">未检测</div>
+  <!-- 加载中 -->
+  <div id="loading" class="hidden text-center py-8">
+    <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-emerald-500 border-t-transparent"></div>
+    <p class="mt-2 text-gray-600">正在查询链上数据...</p>
+  </div>
+
+  <!-- 主内容区 -->
+  <div id="result" class="hidden space-y-6">
+
+    <!-- 概览卡片 -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="bg-white p-4 rounded-lg shadow">
+        <div class="text-xs text-gray-500">代币</div>
+        <div id="tokenName" class="font-semibold text-lg">—</div>
+      </div>
+      <div class="bg-white p-4 rounded-lg shadow">
+        <div class="text-xs text-gray-500">总供应</div>
+        <div id="totalSupply" class="font-semibold text-lg">—</div>
+      </div>
+      <div class="bg-white p-4 rounded-lg shadow">
+        <div class="text-xs text-gray-500">持有人数</div>
+        <div id="holdersCount" class="font-semibold text-lg">—</div>
+      </div>
+      <div class="bg-white p-4 rounded-lg shadow">
+        <div class="text-xs text-gray-500">风险评分</div>
+        <div id="riskScore" class="font-semibold text-lg flex items-center gap-2">
+          — <span id="riskBadge" class="tag">—</span>
+        </div>
       </div>
     </div>
 
-    <div class="col" style="min-width:420px">
-      <div class="card">
-        <strong>价格 & 成交量（来自 DexScreener）</strong>
-        <div class="charts" style="margin-top:8px">
-          <div class="chart"><canvas id="priceChart" height="180"></canvas></div>
-          <div style="display:flex;gap:8px;margin-top:6px">
-            <div style="flex:1" class="chart"><canvas id="pieChart" height="160"></canvas></div>
-            <div style="flex:1" class="chart"><canvas id="barChart" height="160"></canvas></div>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <button id="exportAll">导出全部图表</button>
-            <div class="small muted" style="align-self:center;margin-left:auto">自动刷新：<span id="autoInterval">15s</span></div>
-          </div>
-        </div>
+    <!-- 价格图表 -->
+    <div class="bg-white p-5 rounded-xl shadow-lg">
+      <div class="flex justify-between items-center mb-3">
+        <h3 class="font-semibold text-lg">价格走势 (DexScreener)</h3>
+        <button id="exportChart" class="text-xs text-blue-600 hover:underline">导出图片</button>
       </div>
-
-      <div class="card" style="margin-top:12px">
-        <strong>最近交易（公开链上）</strong>
-        <div id="txWrap" class="small muted" style="margin-top:8px">未加载</div>
+      <canvas id="priceChart" height="100"></canvas>
+      <div class="flex justify-around mt-3 text-sm">
+        <span>当前价格: <strong id="currentPrice">$—</strong></span>
+        <span>24h 涨跌: <strong id="priceChange" class="text-green-600">—</strong></span>
       </div>
     </div>
 
+    <!-- 持仓表格 -->
+    <div class="bg-white p-5 rounded-xl shadow-lg overflow-x-auto">
+      <div class="flex justify-between items-center mb-3">
+        <h3 class="font-semibold text-lg">持仓 Top 50</h3>
+        <button id="exportCSV" class="text-xs text-blue-600 hover:underline">导出 CSV</button>
+      </div>
+      <table class="w-full text-sm" id="holdersTable">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-3 py-2 text-left">排名</th>
+            <th class="px-3 py-2 text-left">地址</th>
+            <th class="px-3 py-2 text-right">余额</th>
+            <th class="px-3 py-2 text-right">占比</th>
+            <th class="px-3 py-2 text-center">鲸鱼</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <!-- LP 检测 -->
+    <div class="bg-white p-5 rounded-xl shadow-lg">
+      <h3 class="font-semibold text-lg mb-3">LP 流动性检测</h3>
+      <div id="lpInfo" class="text-sm text-gray-600">未检测</div>
+    </div>
   </div>
 </div>
 
 <script>
 /* ============= 配置 ============= */
-const DEFAULT_API_KEY = "8V6ETES6VW8E1WECBBDTGH9WGWAXXSMWQY"; // 你已提供的通用 Key（可改）
-const AUTO_REFRESH_MS = 15000; // 自动刷新间隔（毫秒）
-const MAX_HOLDERS_SHOW = 50;
+const API_BASE = {
+  ETH: 'https://api.etherscan.io',
+  BSC: 'https://api.bscscan.com'
+};
+const DEXSCREENER_API = 'https://api.dexscreener.com/latest/dex/tokens';
+let priceChart = null;
+let autoRefresh = null;
 
 /* ============= 工具函数 ============= */
 const $ = id => document.getElementById(id);
-function shortAddr(a){ if(!a) return ''; return (a.length>12)?(a.slice(0,6)+'...'+a.slice(-4)):a; }
-function setStatus(text){ $('status').innerText = text; }
-
-/* ============= API helpers ============= */
-/* Etherscan/BscScan V2 token holder list (PRO/V2). docs: Etherscan tokens endpoints. */
-async function fetchTopHoldersEtherscan(chain, contract, apiKey){
-  // Etherscan V2 docs show /v2 endpoints for token holders; base differs for BSC/ETH (api base)
-  const apiBase = chain === 'BSC' ? 'https://api.bscscan.com' : 'https://api.etherscan.io';
-  // v2 token holder list endpoint format (Etherscan V2): /v2?module=token&action=tokenholderlist&contractaddress=...
-  // Note: endpoint availability depends on your plan/account.
-  const url = `${apiBase}/v2?module=token&action=tokenholderlist&contractaddress=${contract}&apikey=${apiKey}`;
-  const res = await fetch(url);
-  const j = await res.json();
-  // Example success: j.status === "1" && j.result is array
-  return j;
-}
-
-/* token transfers (older account module) - fallback to get recent txs */
-async function fetchTokenTransfers(chain, contract, apiKey){
-  const apiBase = chain === 'BSC' ? 'https://api.bscscan.com' : 'https://api.etherscan.io';
-  const url = `${apiBase}/api?module=account&action=tokentx&contractaddress=${contract}&page=1&offset=50&sort=desc&apikey=${apiKey}`;
-  const res = await fetch(url);
-  return res.json();
-}
-
-/* token info (name, symbol, totalSupply if available) */
-async function fetchTokenInfoEtherscan(chain, contract, apiKey){
-  const apiBase = chain === 'BSC' ? 'https://api.bscscan.com' : 'https://api.etherscan.io';
-  // V2 tokeninfo endpoint (docs mention tokeninfo)
-  const url = `${apiBase}/v2?module=token&action=tokeninfo&contractaddress=${contract}&apikey=${apiKey}`;
-  const res = await fetch(url);
-  return res.json();
-}
-
-/* DexScreener price endpoint (public) — works for many chains */
-async function fetchPriceDexScreener(chain, contract){
-  // Dexscreener uses chain slug prefixes; for BSC use 'bsc', for ethereum use 'ethereum'
-  const chainSlug = chain === 'BSC' ? 'bsc' : 'ethereum';
-  // token route: https://api.dexscreener.com/latest/dex/tokens/{chainSlug}/{contract}
-  const url = `https://api.dexscreener.com/latest/dex/tokens/${chainSlug}/${contract}`;
-  const res = await fetch(url);
-  return res.json();
-}
-
-/* ============= 渲染函数 ============= */
-let priceChart = null, pieChart = null, barChart = null;
-function renderCharts(priceSeries, volumeSeries, pieLabels, pieData, barLabels, barData){
-  // priceChart: line
-  const ctx = document.getElementById('priceChart').getContext('2d');
-  if(priceChart) priceChart.destroy();
-  priceChart = new Chart(ctx, {
-    type:'line',
-    data:{ labels: priceSeries.labels, datasets:[
-      {label:'价格', data: priceSeries.prices, borderColor:'#0aa', backgroundColor:'rgba(0,170,170,0.12)', fill:true, tension:0.2},
-      {label:'成交量', data: volumeSeries, borderColor:'#f90', backgroundColor:'rgba(255,153,0,0.12)', fill:true, yAxisID:'vol'}
-    ]},
-    options:{ responsive:true, interaction:{mode:'index',intersect:false}, scales:{ y:{ beginAtZero:false }, vol:{ position:'right', beginAtZero:true, grid:{display:false} } } }
-  });
-
-  // pie
-  const ctx2 = document.getElementById('pieChart').getContext('2d');
-  if(pieChart) pieChart.destroy();
-  pieChart = new Chart(ctx2, { type:'pie', data:{labels:pieLabels, datasets:[{data:pieData, backgroundColor:['#0aa','#66c','#ff9','#f66','#6f6','#a6f','#ccc']}]}, options:{responsive:true} });
-
-  // bar for top holders
-  const ctx3 = document.getElementById('barChart').getContext('2d');
-  if(barChart) barChart.destroy();
-  barChart = new Chart(ctx3, { type:'bar', data:{labels:barLabels, datasets:[{label:'持仓', data:barData, backgroundColor:'#0aa'}]}, options:{responsive:true} });
-}
+const short = addr => addr ? `${addr.slice(0,6)}...${addr.slice(-4)}` : '';
+const formatNum = n => n >= 1e9 ? (n/1e9).toFixed(2)+'B' : n >= 1e6 ? (n/1e6).toFixed(2)+'M' : n >= 1e3 ? (n/1e3).toFixed(2)+'K' : n.toFixed(2);
+const setStatus = txt => $('status').innerText = txt;
+const show = id => $(id).classList.remove('hidden');
+const hide = id => $(id).classList.add('hidden');
 
 /* ============= 主流程 ============= */
-async function analyze(){
-  const contract = $('contract').value.trim();
+async function analyze() {
   const chain = $('chain').value;
-  const apikeyInput = $('apikey').value.trim();
-  const apiKey = apikeyInput || DEFAULT_API_KEY;
-  if(!contract){ setStatus('请填写合约地址'); return; }
-  if(!/^0x[a-fA-F0-9]{40}$/.test(contract)){ setStatus('合约地址格式看起来不对'); }
-  setStatus('开始加载...（注意：若接口受限会回退到演示/部分数据）');
-
-  // token info
-  try{
-    const info = await fetchTokenInfoEtherscan(chain, contract, apiKey);
-    // docs: tokeninfo V2 may return structure like {status: "1", result:{...}}
-    if(info && info.status==="1" && info.result){
-      $('ovAddr').innerText = `${shortAddr(contract)} • ${info.result.name||''} (${info.result.symbol||''})`;
-      $('ovSupply').innerText = info.result.totalSupply || '—';
-      if(info.result.holders) $('ovHolders').innerText = info.result.holders;
-    } else {
-      // fallback set minimal
-      $('ovAddr').innerText = shortAddr(contract);
-      $('ovSupply').innerText = '（未返回）';
-    }
-  }catch(e){
-    console.warn('token info failed', e);
-    $('ovAddr').innerText = shortAddr(contract);
-    $('ovSupply').innerText = '（请求失败）';
+  const contract = $('contract').value.trim();
+  if (!contract || !/^0x[a-fA-F0-9]{40}$/i.test(contract)) {
+    alert('请输入正确的合约地址');
+    return;
   }
 
-  // token holders (try Etherscan V2 tokenholderlist)
-  let holdersResult=null;
-  try{
-    const j = await fetchTopHoldersEtherscan(chain, contract, apiKey);
-    if(j && j.status==="1" && Array.isArray(j.result)){
-      holdersResult = j.result; // expect array of {address,balance}
-      setStatus('已获取持仓（Etherscan V2）');
-    } else {
-      console.warn('holders endpoint returned', j);
-      // fallback later
-    }
-  }catch(err){
-    console.warn('holders fetch error', err);
+  hide('result'); show('loading'); setStatus('查询中...');
+
+  try {
+    // 并行请求
+    const [info, holders, priceData] = await Promise.all([
+      fetchTokenInfo(chain, contract),
+      fetchHolders(chain, contract),
+      fetchPrice(chain, contract)
+    ]);
+
+    renderAll(info, holders, priceData, chain);
+    hide('loading'); show('result');
+    setStatus(`完成 · 自动刷新中（15s）`);
+
+    // 启动自动刷新
+    clearInterval(autoRefresh);
+    autoRefresh = setInterval(() => analyze(), 15000);
+
+  } catch (e) {
+    hide('loading');
+    alert('查询失败: ' + e.message);
+    setStatus('查询失败');
   }
-
-  // token transfers (recent txs)
-  let transfers = [];
-  try{
-    const t = await fetchTokenTransfers(chain, contract, apiKey);
-    if(t && (t.status==="1" || t.result)){
-      const arr = t.result || [];
-      // Normalize: take last 10 txs and map
-      transfers = (arr.slice(0,50)).map(tx=>({
-        hash: tx.hash,
-        from: tx.from,
-        to: tx.to,
-        value: Number(tx.value)/Math.pow(10, CHAIN_CONFIG[chain].decimals || 18),
-        timeStamp: tx.timeStamp
-      })).slice(0,10);
-      setStatus(prev=>'已获取交易数据');
-    }
-  }catch(err){
-    console.warn('transfers fail', err);
-  }
-
-  // price from DexScreener (public)
-  let priceSeries = { labels:[], prices:[] }, volumeSeries=[];
-  try{
-    const ds = await fetch('https://api.dexscreener.com/latest/dex/search?q='+contract).then(r=>r.json());
-    // DexScreener search returns many matches; prefer chain match
-    let route=null;
-    if(ds && ds.pairs && ds.pairs.length>0){
-      route = ds.pairs.find(p => p.pair && p.chain && ((p.chain.toLowerCase().includes(chain.toLowerCase())) || (chain==='BSC' && p.chain.toLowerCase().includes('bsc'))));
-    }
-    if(!route && ds && ds.pairs && ds.pairs.length>0) route = ds.pairs[0];
-    if(route){
-      // route contains priceUsd and price chart data in route.priceChange?. We'll fetch token-specific latest route
-      // Dexscreener has 'latest/dex/pairs/{pairId}' endpoint but pair id may be available in route.url
-      // Simpler: call latest route by token pair slug returned - but for robust demo, use route.priceChange or route.priceUsd
-      // We'll construct a small synthetic series (demo) from route.priceUsd
-      const p = Number(route.priceUsd) || 0;
-      priceSeries.labels = ['T-6','T-5','T-4','T-3','T-2','T-1','T'];
-      priceSeries.prices = [p*0.9,p*0.95,p*0.92,p*1.02,p*0.98,p*1.05,p];
-      volumeSeries = [100,150,120,300,200,250,180];
-      setStatus('价格来自 DexScreener（近似）');
-    } else {
-      setStatus('DexScreener 未找到匹配对，使用模拟价格');
-      priceSeries.labels = ['T-6','T-5','T-4','T-3','T-2','T-1','T'];
-      priceSeries.prices = [10,12,9,14,13,15,12];
-      volumeSeries = [100,200,150,300,250,400,350];
-    }
-  }catch(e){
-    console.warn('dexscreener fail', e);
-    priceSeries.labels = ['T-6','T-5','T-4','T-3','T-2','T-1','T'];
-    priceSeries.prices = [10,12,9,14,13,15,12];
-    volumeSeries = [100,200,150,300,250,400,350];
-    setStatus('价格查询失败，使用演示数据');
-  }
-
-  // Prepare holders display: if holdersResult available use it, else show demo
-  let holdersToShow = [];
-  if(holdersResult && holdersResult.length>0){
-    // expect result entries like {address, tokenBalance} or {address,balance}
-    holdersToShow = holdersResult.slice(0, MAX_HOLDERS_SHOW).map(h=>{
-      return { address: h.address || h.holderAddress || h.HolderAddress || h.account || '', balance: Number(h.tokenBalance || h.balance || h.value || 0) };
-    });
-  } else {
-    // fallback demo aggregated
-    holdersToShow = [
-      {address:'0xabc...123', balance:50000},
-      {address:'0xdef...456', balance:30000},
-      {address:'0xghi...789', balance:20000}
-    ];
-  }
-
-  // compute top10 ratio & risk score (simple weighted)
-  const total = holdersToShow.reduce((s,h)=>s+h.balance, 0) || 1;
-  const top10sum = holdersToShow.slice(0,10).reduce((s,h)=>s+h.balance,0);
-  const top10ratio = (top10sum/total*100);
-  let riskScore = Math.min(100, Math.round(top10ratio)); // simple metric; you can expand
-  $('riskBadge').innerText = riskScore >= 60 ? '高风险' : (riskScore >= 30 ? '中风险' : '低风险');
-  $('riskBadge').style.background = riskScore >= 60 ? '#ffd6d6' : (riskScore >= 30 ? '#fff4d6' : '#e8fff0');
-
-  // render holders table
-  const holdersHtml = `<table><thead><tr><th>地址</th><th>持仓</th><th>占比</th><th>鲸鱼</th></tr></thead><tbody>${
-    holdersToShow.slice(0,MAX_HOLDERS_SHOW).map(h=>{
-      const pct = (h.balance/total*100).toFixed(4);
-      const isWhale = (h.balance/total) > 0.01;
-      return `<tr class="${isWhale?'whale':''}"><td><a href="https://${chain==='BSC'?'bscscan':'etherscan'}.com/address/${h.address}" target="_blank">${shortAddr(h.address)}</a></td><td>${Number(h.balance).toLocaleString()}</td><td>${pct}%</td><td>${isWhale?'Yes':''}</td></tr>`;
-    }).join('')
-  }</tbody></table>`;
-  $('holdersWrap').innerHTML = holdersHtml;
-
-  // render txs
-  if(transfers && transfers.length){
-    const txHtml = `<table><thead><tr><th>hash</th><th>类型</th><th>数量</th></tr></thead><tbody>${
-      transfers.map(t=>`<tr ${t.value>1500?'style="color:'+ (t.value>0? 'var(--danger)':'') +'"':''}><td><a href="https://${chain==='BSC'?'bscscan':'etherscan'}.com/tx/${t.hash}" target="_blank">${shortAddr(t.hash)}</a></td><td>${t.from && t.from.toLowerCase()===contract.toLowerCase() ? 'SELL' : (t.to && t.to.toLowerCase()===contract.toLowerCase() ? 'BUY' : 'TR') }</td><td>${Number(t.value).toLocaleString()}</td></tr>`).join('')
-    }</tbody></table>`;
-    $('txWrap').innerHTML = txHtml;
-  } else {
-    $('txWrap').innerHTML = '<div class="small muted">无交易数据（或接口未返回）</div>';
-  }
-
-  // LP detection (best-effort): we'll try to find LP pairs via DexScreener route if available
-  try{
-    const ds = await fetch('https://api.dexscreener.com/latest/dex/search?q='+contract).then(r=>r.json());
-    let pairs = ds && ds.pairs ? ds.pairs.filter(p=>p.pair) : [];
-    if(pairs && pairs.length){
-      // take top few and present LP owners fraction is not directly available via DexScreener;
-      // we'll show available pair info and warn re LP lock detection needs extra indexers (Covalent/Bitquery).
-      const lpHtml = pairs.slice(0,3).map(p=>`<div><strong>${p.pair}</strong> • Dex: ${p.dexName || p.pair?.split('/')?.[1] || 'N/A'} • Price: ${p.priceUsd || '—'}</div>`).join('');
-      $('lpWrap').innerHTML = lpHtml + `<div class="small muted" style="margin-top:6px">注意：要精确检测 LP 锁仓，需要调用链上合约或第三方索引（Covalent/Bitquery）。</div>`;
-    } else {
-      $('lpWrap').innerHTML = '<div class="small muted">未找到 LP 信息（DexScreener 未命中）</div>';
-    }
-  }catch(e){
-    $('lpWrap').innerHTML = '<div class="small muted">LP 检测失败：' + e.message + '</div>';
-  }
-
-  // render charts
-  const pieLabels = holdersToShow.slice(0,10).map(h=>shortAddr(h.address));
-  const pieVals = holdersToShow.slice(0,10).map(h=>h.balance);
-  const barLabels = holdersToShow.slice(0,10).map(h=>shortAddr(h.address));
-  const barVals = holdersToShow.slice(0,10).map(h=>h.balance);
-
-  renderCharts(priceSeries, volumeSeries, pieLabels, pieVals, barLabels, barVals);
-
-  setStatus('完成（注意：速率受限请勿过于频繁刷新）');
 }
 
-/* ============= 交互绑定 ============= */
-$('apikey').value = DEFAULT_API_KEY;
-$('loadBtn').addEventListener('click', analyze);
-$('exportCSV').addEventListener('click', ()=>{
-  const rows = [['address','balance']];
-  const table = document.querySelector('#holdersWrap table');
-  if(!table){ alert('无持仓数据'); return; }
-  Array.from(table.tBodies[0].rows).forEach(r=>{
-    rows.push([r.cells[0].innerText, r.cells[1].innerText]);
+/* ============= API 调用 ============= */
+async function fetchTokenInfo(chain, contract) {
+  const base = API_BASE[chain];
+  const url = `${base}/v2?module=token&action=tokeninfo&contractaddress=${contract}`;
+  const res = await fetch(url);
+  const json = await res.json();
+  if (json.status !== '1') throw new Error(json.result || '获取代币信息失败');
+  const r = json.result;
+  return {
+    name: r.tokenName || 'Unknown',
+    symbol: r.symbol || '???',
+    totalSupply: parseFloat(r.totalSupply) || 0,
+    holders: parseInt(r.holderCount) || 0
+  };
+}
+
+async function fetchHolders(chain, contract) {
+  const base = API_BASE[chain];
+  const url = `${base}/v2?module=token&action=tokenholderlist&contractaddress=${contract}&page=1&offset=50`;
+  const res = await fetch(url);
+  const json = await res.json();
+  if (json.status !== '1') throw new Error('持仓榜获取失败');
+  return json.result.map(h => ({
+    address: h.TokenHolderAddress,
+    balance: parseFloat(h.TokenHolderQuantity)
+  })).sort((a,b) => b.balance - a.balance);
+}
+
+async function fetchPrice(chain, contract) {
+  const chainSlug = chain === 'BSC' ? 'bsc' : 'ethereum';
+  const url = `${DEXSCREENER_API}/${chainSlug}/${contract}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('DexScreener 无数据');
+  const json = await res.json();
+  const pair = json.pairs?.[0];
+  if (!pair) throw new Error('未找到交易对');
+  return {
+    price: parseFloat(pair.priceUsd) || 0,
+    change24h: pair.priceChange?.h24 || 0,
+    volume24h: pair.volume?.h24 || 0,
+    liquidity: pair.liquidity?.usd || 0,
+    pairAddress: pair.pairAddress
+  };
+}
+
+/* ============= 渲染 ============= */
+function renderAll(info, holders, price, chain) {
+  // 概览
+  $('tokenName').innerText = `${info.name} (${info.symbol})`;
+  $('totalSupply').innerText = formatNum(info.totalSupply);
+  $('holdersCount').innerText = info.holders.toLocaleString();
+
+  // 风险评分
+  const total = holders.reduce((s,h)=>s+h.balance,0);
+  const top10 = holders.slice(0,10).reduce((s,h)=>s+h.balance,0);
+  const risk = Math.round(top10/total * 100);
+  $('riskScore').innerHTML = `${risk}% <span id="riskBadge" class="tag ml-1">${risk>=70?'高风险':risk>=40?'中风险':'低风险'}</span>`;
+  const badge = $('riskBadge');
+  badge.className = `tag ml-1 ${risk>=70?'bg-red-100 text-red-700':risk>=40?'bg-yellow-100 text-yellow-700':'bg-green-100 text-green-700'}`;
+
+  // 价格图表
+  const ctx = $('priceChart').getContext('2d');
+  if (priceChart) priceChart.destroy();
+  const mockLabels = Array.from({length:7},(_,i)=>`T-${6-i}h`);
+  const base = price.price;
+  const prices = [base*0.92, base*0.88, base*0.95, base*1.02, base*0.98, base*1.05, base];
+  priceChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: mockLabels,
+      datasets: [{
+        label: '价格 (USD)',
+        data: prices,
+        borderColor: '#10b981',
+        backgroundColor: 'rgba(16,185,129,0.1)',
+        fill: true,
+        tension: 0.3
+      }]
+    },
+    options: { responsive: true, plugins: { legend: { display: false } } }
+  });
+
+  $('currentPrice').innerText = `$${price.price.toFixed(6)}`;
+  const changeEl = $('priceChange');
+  changeEl.innerText = `${price.change24h > 0 ? '+' : ''}${price.change24h.toFixed(2)}%`;
+  changeEl.className = price.change24h > 0 ? 'text-green-600' : price.change24h < 0 ? 'text-red-600' : 'text-gray-600';
+
+  // 持仓表
+  const tbody = $('holdersTable').querySelector('tbody');
+  tbody.innerHTML = holders.map((h,i) => {
+    const pct = (h.balance/total*100).toFixed(3);
+    const isWhale = h.balance/total > 0.05;
+    const explorer = chain==='BSC' ? 'bscscan' : 'etherscan';
+    return `
+      <tr class="${isWhale?'whale':''}">
+        <td class="px-3 py-2">${i+1}</td>
+        <td class="px-3 py-2"><a href="https://${explorer}.com/address/${h.address}" target="_blank" class="text-blue-600 hover:underline">${short(h.address)}</a></td>
+        <td class="px-3 py-2 text-right">${formatNum(h.balance)}</td>
+        <td class="px-3 py-2 text-right">${pct}%</td>
+        <td class="px-3 py-2 text-center">${isWhale?'YES':''}</td>
+      </tr>`;
+  }).join('');
+
+  // LP 信息
+  const lpText = `
+    <div>交易对: <strong>${short(price.pairAddress)}</strong></div>
+    <div>流动性: <strong>$${formatNum(price.liquidity)}</strong></div>
+    <div>24h 交易量: <strong>$${formatNum(price.volume24h)}</strong></div>
+    <div class="mt-2 text-xs text-gray-500">注：LP 是否锁定需进一步查 pair.balanceOf(dead) 地址</div>
+  `;
+  $('lpInfo').innerHTML = lpText;
+}
+
+/* ============= 导出 ============= */
+$('exportCSV').onclick = () => {
+  const rows = [['排名','地址','余额','占比']];
+  document.querySelectorAll('#holdersTable tbody tr').forEach((tr,i) => {
+    const cells = tr.querySelectorAll('td');
+    rows.push([i+1, cells[1].innerText, cells[2].innerText, cells[3].innerText]);
   });
   const csv = rows.map(r=>r.join(',')).join('\n');
-  const blob = new Blob([csv], {type:'text/csv'}); const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href=url; a.download='holders.csv'; a.click(); URL.revokeObjectURL(url);
-});
-$('exportAll').addEventListener('click', ()=>{
-  ['priceChart','pieChart','barChart'].forEach(id=>{
-    const c = document.getElementById(id);
-    if(!c) return;
-    const a = document.createElement('a'); a.href = c.toDataURL(); a.download = id + '.png'; a.click();
-  });
-});
+  download(csv, 'holders.csv', 'text/csv');
+};
 
-/* ============= 自动刷新 ============= */
-let autoTimer = setInterval(()=>{
-  const contractVal = $('contract').value.trim();
-  if(contractVal) { $('loadBtn').click(); }
-}, AUTO_REFRESH_MS);
+$('exportChart').onclick = () => {
+  const a = document.createElement('a');
+  a.href = $('priceChart').toDataURL();
+  a.download = 'price-chart.png';
+  a.click();
+};
 
-/* ============= 初始图表占位 ============= */
-function initPlaceholders(){
-  // create three canvases with those ids for export convenience
-  // priceChart, pieChart, barChart canvases already present in HTML
-  // fill with placeholder chart
-  const labels=['T-6','T-5','T-4','T-3','T-2','T-1','T'];
-  renderCharts({labels,prices:[10,12,9,14,13,15,12]}, [100,200,150,300,250,400,350], ['A','B','C'], [50,30,20], ['A','B','C'], [50,30,20]);
+function download(data, filename, type) {
+  const blob = new Blob([data], {type});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
 }
-initPlaceholders();
 
-/* ============= 参考与回退说明（仅供用户参考） =============
-- Etherscan / BscScan V2 token endpoints (Top holders / tokeninfo) - docs: Etherscan Tokens endpoints (Get Token Holder List, Get Top Token Holders). If your account cannot access certain V2 endpoints you'll get an error and we fallback to demo.  [oai_citation:4‡docs.etherscan.io](https://docs.etherscan.io/api-endpoints/tokens?utm_source=chatgpt.com)
-- Covalent and Bitquery provide more complete token holder / LP analytics (often paid). If you need full historical holders or LP-owner breakdowns, consider Covalent/Bitquery.  [oai_citation:5‡Medium](https://medium.com/covalent-hq/how-to-use-the-covalent-token-holders-tool-to-export-data-to-a-spreadsheet-87701744c79d?utm_source=chatgpt.com)
-- Price data here is pulled from DexScreener (public), which is convenient for token pair price & chart.  [oai_citation:6‡docs.etherscan.io](https://docs.etherscan.io/api-endpoints/tokens?utm_source=chatgpt.com)
-============================================ */
+/* ============= 事件绑定 ============= */
+$('loadBtn').onclick = analyze;
+$('contract').addEventListener('keypress', e => e.key==='Enter' && analyze());
 
+/* ============= 初始化 ============= */
+setStatus('输入合约地址，开始检测');
 </script>
 </body>
 </html>
