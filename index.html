@@ -1,135 +1,208 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>LIVIA V2 — 移动 DeFi 分析（演示/三链）</title>
-<meta name="description" content="LIVIA DeFi 分析平台 V2 — BSC/ETH/Solana — demo first" />
-<meta name="theme-color" content="#0af" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LIVIA V3 — 科幻玻璃风 移动 DeFi 分析 (Demo)</title>
+<meta name="theme-color" content="#0af">
+<meta name="description" content="LIVIA V3 - Demo DeFi analysis (mobile-first)"/>
+
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <style>
+  /* ===== 全局风格：玻璃 + 科幻感（移动优先） ===== */
   :root{
-    --bg:#0b0f1a; --panel:#0f1724; --accent:#0af; --muted:#8892a6;
-    --danger:#ff6b6b; --safe:#6fe38b;
+    --bg1: #071021;
+    --bg2: #0b1220;
+    --glass: rgba(255,255,255,0.04);
+    --accent: #16c0ff;
+    --accent-2: #7b6bff;
+    --muted: #9fb4c9;
+    --danger: #ff6b6b;
+    --safe: #6fe38b;
   }
-  html,body{height:100%;margin:0;background:linear-gradient(180deg,#071224 0%, #0b0f1a 100%);color:#e6eef6;font-family:Inter, "Helvetica Neue", Arial, sans-serif;}
-  .wrap{max-width:980px;margin:0 auto;padding:12px;}
-  h1{font-size:18px;margin:6px 0;}
-  .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:10px;padding:10px;margin:10px 0;border:1px solid rgba(255,255,255,0.03)}
-  select,input,button{width:100%;padding:10px;margin:8px 0;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:#071225;color:#fff;font-size:14px;box-sizing:border-box}
-  button{background:var(--accent);color:#04111a;border:0;cursor:pointer}
-  label.row{display:flex;gap:8px;align-items:center}
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--bg1),var(--bg2));color:#eaf6ff;font-family:"Inter", "Helvetica Neue", Arial, sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+  .wrap{max-width:1100px;margin:0 auto;padding:12px}
+  header{display:flex;gap:8px;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:20;background:linear-gradient(180deg, rgba(10,16,26,0.6), rgba(10,16,26,0.25));backdrop-filter: blur(6px);border-bottom:1px solid rgba(255,255,255,0.03);padding:8px;border-radius:10px}
+  .brand{display:flex;align-items:center;gap:8px}
+  .logo{width:40px;height:40px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;font-weight:700;color:#04111a}
+  .brand h1{font-size:16px;margin:0}
+  .search-row{flex:1;margin:0 8px;display:flex;gap:8px;align-items:center}
+  .search-row input{flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:#eaf6ff}
+  .top-actions{display:flex;gap:8px;align-items:center}
+  select,input,button{font-size:14px}
+  .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:12px;padding:12px;margin:12px 0;border:1px solid rgba(255,255,255,0.03);box-shadow:0 6px 18px rgba(2,8,20,0.4)}
+  .grid{display:grid;grid-template-columns:1fr;gap:12px}
+  @media(min-width:900px){ .grid{grid-template-columns: 350px 1fr 320px} header .search-row{max-width:520px} }
+
+  /* small UI */
+  .muted{color:var(--muted);font-size:13px}
+  .accent{color:var(--accent)}
+  .btn{padding:8px;border-radius:8px;border:0;background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#04111a;cursor:pointer}
+  .btn-ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:#eaf6ff}
+
+  /* progress */
+  #progressBar{height:6px;background:rgba(255,255,255,0.02);border-radius:6px;overflow:hidden;margin-top:8px}
+  #progressFill{height:100%;width:0;background:linear-gradient(90deg,var(--accent),#4fd3ff);transition:width .25s}
+
+  /* holders table */
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{border-bottom:1px solid rgba(255,255,255,0.03);padding:8px;text-align:center}
+  th{color:var(--muted);font-weight:600}
+  .whale{background:rgba(255,250,160,0.14);color:#04111a}
+
+  /* charts */
+  .chart-wrap{display:flex;flex-direction:column;gap:12px}
+  .chart-card{background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.01));padding:10px;border-radius:10px;position:relative}
+  .chart-export{position:absolute;right:10px;top:10px;background:var(--accent);border:0;padding:6px;border-radius:8px;color:#04111a;cursor:pointer}
+
+  /* modal */
+  #txModal{position:fixed;inset:0;background:rgba(0,0,0,0.85);display:none;z-index:9999;padding:12px;box-sizing:border-box}
+  #modalCard{max-width:960px;margin:30px auto;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:10px;padding:14px;border:1px solid rgba(255,255,255,0.03)}
+  #closeBtn{position:absolute;right:20px;top:20px;background:var(--danger);border:0;padding:8px 12px;border-radius:8px;color:#fff;cursor:pointer}
+
+  /* footer small */
   .small{font-size:13px;color:var(--muted)}
-  #progressBar{height:6px;background:#0b1220;border-radius:6px;overflow:hidden;margin-top:6px}
-  #progressFill{height:100%;width:0;background:linear-gradient(90deg,var(--accent),#4fd3ff)}
-  table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
-  th,td{border:1px solid rgba(255,255,255,0.04);padding:8px;text-align:center}
-  th{background:rgba(255,255,255,0.02)}
-  .whale{background:#fff4b0;color:#03121a}
-  .red{color:var(--danger)}
-  .green{color:var(--safe)}
-  .flex{display:flex;gap:8px;align-items:center}
-  .chart-row{display:flex;gap:8px;flex-direction:column}
-  .chart-box{background:#071021;padding:8px;border-radius:8px;position:relative}
-  .chart-export{position:absolute;right:8px;top:8px;background:var(--accent);color:#04111a;padding:6px;border-radius:6px;border:0}
-  .meta{font-size:13px;color:var(--muted);margin-top:6px}
-  .toggle{display:inline-block;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,0.02)}
-  #txModal{position:fixed;inset:0;background:rgba(0,0,0,0.85);display:none;z-index:9999;padding:20px;box-sizing:border-box}
-  #modalCard{background:#071225;border-radius:8px;padding:12px;color:#fff;max-width:720px;margin:30px auto}
-  #closeBtn{position:absolute;right:20px;top:20px;background:var(--danger);color:#fff;border:0;padding:8px 10px;border-radius:8px}
-  @media(max-width:720px){
-    .wrap{padding:10px}
-  }
+  .tag{display:inline-block;padding:6px 8px;border-radius:999px;background:rgba(255,255,255,0.02);font-size:13px}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>LIVIA 分析平台 V2（移动版）</h1>
-
-  <div class="card">
-    <div class="small">选择链 / 合约（演示优先）</div>
-    <select id="chainSelect" aria-label="chain">
-      <option value="BSC">BSC</option>
-      <option value="ETH">ETH</option>
-      <option value="Solana">Solana</option>
-    </select>
-
-    <input id="tokenAddress" placeholder="合约地址，例如 0x1234..." />
-    <input id="apiKey" placeholder="API Key（可选，留空使用示例数据）" />
-
-    <label class="row small">
-      <input type="checkbox" id="forceDemo" /> 强制使用示例数据（不调用真实 API）
-    </label>
-
-    <div class="flex">
-      <button id="loadBtn">加载数据（演示/真实）</button>
-      <button id="saveBtn" style="background:#2b6f6b">保存到本地</button>
-      <button id="clearBtn" style="background:#444">清空本地</button>
-    </div>
-
-    <div id="error" class="small" style="color:#ffb3b3"></div>
-    <div id="loading" class="small" style="display:none;margin-top:6px">分析中，请稍候…</div>
-    <div id="progressBar"><div id="progressFill"></div></div>
-    <div id="riskWarning" class="meta"></div>
-  </div>
-
-  <!-- Overview card -->
-  <div class="card" id="overviewCard">
-    <div class="small">快速概览</div>
-    <div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">
-      <div style="flex:1;min-width:150px">
-        <div class="small">合约</div>
-        <div id="ovContract" class="small" style="word-break:break-all">—</div>
-      </div>
-      <div style="flex:1;min-width:120px">
-        <div class="small">示例总量</div>
-        <div id="ovSupply" class="small">—</div>
-      </div>
-      <div style="flex:1;min-width:120px">
-        <div class="small">前10占比</div>
-        <div id="ovTop10" class="small">—</div>
-      </div>
-      <div style="flex:1;min-width:120px">
-        <div class="small">鲸鱼数量(>1%)</div>
-        <div id="ovWhales" class="small">—</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Holders -->
-  <div class="card">
-    <div class="small">持仓列表（前 50，可示例或真实）</div>
-    <div id="holdersTable">请先加载数据</div>
-  </div>
-
-  <!-- Charts -->
-  <div class="card chart-row">
-    <div style="display:flex;align-items:center;justify-content:space-between">
-      <div class="small">图表（价格走势 & 持仓分布）</div>
+  <!-- header -->
+  <header>
+    <div class="brand">
+      <div class="logo">LV</div>
       <div>
-        <label class="toggle small"><input id="autoRefresh" type="checkbox" /> 自动刷新（60s）</label>
+        <h1>LIVIA</h1>
+        <div class="small muted">独立风 · 科幻玻璃 · 移动优先</div>
       </div>
     </div>
 
-    <div class="chart-box" style="min-height:280px">
-      <button class="chart-export" id="exportBtn">导出折线图</button>
-      <canvas id="lineChart"></canvas>
-      <div style="height:14px"></div>
-      <canvas id="pieChart"></canvas>
+    <div class="search-row">
+      <input id="quickSearch" placeholder="输入代币名或合约地址，按回车搜索 (示例: LINDAAI)"/>
+      <button id="searchBtn" class="btn-ghost">搜索</button>
+    </div>
+
+    <div class="top-actions">
+      <div class="small muted">模式</div>
+      <select id="viewMode">
+        <option value="demo">演示</option>
+        <option value="live">真实（需 API）</option>
+      </select>
+    </div>
+  </header>
+
+  <!-- main grid -->
+  <div class="grid" style="margin-top:12px">
+    <!-- left column: controls & overview -->
+    <div>
+      <div class="card">
+        <div class="small muted">链</div>
+        <select id="chain">
+          <option value="BSC">BSC</option>
+          <option value="ETH">ETH</option>
+          <option value="Solana">Solana</option>
+        </select>
+
+        <div class="small muted">合约地址</div>
+        <input id="contract" placeholder="粘贴合约地址（长按粘贴）" />
+
+        <div class="small muted">API Key（可选）</div>
+        <input id="apikey" placeholder="填写后可尝试真实请求（可选）" />
+
+        <label class="small" style="display:flex;gap:8px;align-items:center">
+          <input type="checkbox" id="forceDemo" /> 强制使用示例数据（不调用真实 API）
+        </label>
+
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button id="load" class="btn">加载数据</button>
+          <button id="save" class="btn-ghost">保存</button>
+        </div>
+
+        <div id="error" class="small" style="color:var(--danger);margin-top:8px"></div>
+        <div id="progressBar"><div id="progressFill"></div></div>
+        <div id="supplySummary" style="margin-top:8px" class="small muted">总览：等待加载</div>
+      </div>
+
+      <div class="card">
+        <div class="small muted">Quick Actions</div>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+          <button id="demoBtn" class="btn-ghost">加载演示代币</button>
+          <button id="clearLocal" class="btn-ghost">清空本地</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="small muted">合约安全（演示）</div>
+        <div id="contractSecurity" class="small">——</div>
+      </div>
+    </div>
+
+    <!-- middle column: charts & holders -->
+    <div>
+      <div class="card chart-card" style="padding:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-weight:700">价格 & 交易</div>
+            <div class="small muted">折线图 (价格) + 成交量</div>
+          </div>
+          <div><span class="tag" id="tokenTag">—</span></div>
+        </div>
+
+        <div class="chart-wrap" style="margin-top:10px">
+          <div class="chart-card" style="min-height:220px">
+            <button id="exportLine" class="chart-export">导出折线</button>
+            <canvas id="lineChart" height="220"></canvas>
+          </div>
+          <div class="chart-card" style="min-height:200px">
+            <button id="exportPie" class="chart-export">导出分布</button>
+            <canvas id="pieChart" height="200"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:700">持仓列表（Top 50）</div>
+          <div class="small muted">点击地址查看详情</div>
+        </div>
+        <div id="holders" style="margin-top:12px">请先加载数据</div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:700">最近交易（示例）</div>
+          <div class="small muted">监管买卖轨迹</div>
+        </div>
+        <div id="txList" class="small muted" style="margin-top:8px">无数据</div>
+      </div>
+    </div>
+
+    <!-- right column: details & whale monitor -->
+    <div>
+      <div class="card">
+        <div style="font-weight:700">风险概览</div>
+        <div id="riskBox" style="margin-top:8px" class="small muted">无数据</div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between"><div style="font-weight:700">鲸鱼监控</div><div class="small muted">Top 大户</div></div>
+        <div id="whales" style="margin-top:8px">请加载数据</div>
+      </div>
+
+      <div class="card">
+        <div style="font-weight:700">流动性（示例）</div>
+        <div id="liquidity" class="small muted" style="margin-top:8px">暂无</div>
+      </div>
     </div>
   </div>
 
-  <!-- Contracts & liquidity -->
-  <div class="card">
-    <div class="small">流动性 & 合约安全（演示逻辑）</div>
-    <div id="liquidityInfo" class="small">请加载合约查看</div>
-  </div>
-
+  <footer style="margin-top:12px" class="small muted">LIVIA V3 · Demo · Mobile-first · 将来支持真实 API（BscScan/Etherscan/Covalent）</footer>
 </div>
 
 <!-- Modal -->
-<div id="txModal" role="dialog" aria-modal="true">
+<div id="txModal">
   <button id="closeBtn">关闭</button>
   <div id="modalCard">
     <div id="modalContent"></div>
@@ -137,296 +210,259 @@
 </div>
 
 <script>
-/* =========================
-   数据与工具函数（V2）
-   ========================= */
-const chainSelect = document.getElementById('chainSelect');
-const tokenAddressEl = document.getElementById('tokenAddress');
-const apiKeyEl = document.getElementById('apiKey');
-const forceDemoEl = document.getElementById('forceDemo');
-const loadBtn = document.getElementById('loadBtn');
-const saveBtn = document.getElementById('saveBtn');
-const clearBtn = document.getElementById('clearBtn');
-const errorEl = document.getElementById('error');
-const loadingEl = document.getElementById('loading');
-const progressFill = document.getElementById('progressFill');
-const holdersTable = document.getElementById('holdersTable');
-const riskWarning = document.getElementById('riskWarning');
-const ovContract = document.getElementById('ovContract');
-const ovSupply = document.getElementById('ovSupply');
-const ovTop10 = document.getElementById('ovTop10');
-const ovWhales = document.getElementById('ovWhales');
-const lineCanvas = document.getElementById('lineChart');
-const pieCanvas = document.getElementById('pieChart');
-const exportBtn = document.getElementById('exportBtn');
-const autoRefreshEl = document.getElementById('autoRefresh');
-const liquidityInfo = document.getElementById('liquidityInfo');
-const modal = document.getElementById('txModal');
-const modalContent = document.getElementById('modalContent');
-const closeBtn = document.getElementById('closeBtn');
+/* ==========================
+   V3 Core JS (全部在前端：demo-first)
+   ========================== */
 
-const CHAIN_INFO = { BSC:{scan:'bscscan.com'}, ETH:{scan:'etherscan.com'}, Solana:{scan:'solscan.io'} };
+/* DOM */
+const el = id => document.getElementById(id);
+const chainEl = el('chain');
+const contractEl = el('contract');
+const apikeyEl = el('apikey');
+const forceDemoEl = el('forceDemo');
+const loadBtn = el('load');
+const saveBtn = el('save');
+const progressFill = el('progressFill');
+const errorEl = el('error');
+const supplySummary = el('supplySummary');
+const demoBtn = el('demoBtn');
+const clearLocalBtn = el('clearLocal');
+const holdersDiv = el('holders');
+const txList = el('txList');
+const riskBox = el('riskBox');
+const whalesDiv = el('whales');
+const liquidityDiv = el('liquidity');
+const tokenTag = el('tokenTag');
+const exportLine = el('exportLine');
+const exportPie = el('exportPie');
+const lineCtx = document.getElementById('lineChart').getContext('2d');
+const pieCtx = document.getElementById('pieChart').getContext('2d');
+const txModal = el('txModal');
+const modalContent = el('modalContent');
+const closeBtnEl = el('closeBtn');
+const quickSearch = el('quickSearch');
+const searchBtn = el('searchBtn');
+const viewMode = el('viewMode');
 
+/* state */
 let lineChart = null, pieChart = null;
-let autoRefreshTimer = null;
 
-/* 本地保存 key/last */
-function saveLocal(){
-  const state = {chain:chainSelect.value, token:tokenAddressEl.value.trim(), apiKey:apiKeyEl.value.trim(), forceDemo:forceDemoEl.checked};
-  localStorage.setItem('livia_v2_state', JSON.stringify(state));
-  alert('已保存本地，下次打开会自动填充');
-}
-function loadLocal(){
-  try{
-    const s = JSON.parse(localStorage.getItem('livia_v2_state') || '{}');
-    if(s.chain) chainSelect.value = s.chain;
-    if(s.token) tokenAddressEl.value = s.token;
-    if(s.apiKey) apiKeyEl.value = s.apiKey;
-    if(typeof s.forceDemo === 'boolean') forceDemoEl.checked = s.forceDemo;
-  }catch(e){}
-}
-function clearLocal(){
-  localStorage.removeItem('livia_v2_state');
-  tokenAddressEl.value = '';
-  apiKeyEl.value = '';
-  forceDemoEl.checked = false;
-  alert('本地已清空');
-}
+/* util */
+function setProgress(n){ progressFill.style.width = Math.max(0, Math.min(100, n)) + '%'; }
+function setError(msg){ errorEl.textContent = msg || ''; }
+function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
+function saveLocal(){ const s={chain:chainEl.value, contract:contractEl.value.trim(), apikey:apikeyEl.value.trim(), force:forceDemoEl.checked}; localStorage.setItem('livia_v3', JSON.stringify(s)); alert('已保存本地'); }
+function loadLocal(){ try{ const s = JSON.parse(localStorage.getItem('livia_v3')||'{}'); if(s.chain) chainEl.value=s.chain; if(s.contract) contractEl.value=s.contract; if(s.apikey) apikeyEl.value=s.apikey; if(typeof s.force==='boolean') forceDemoEl.checked=s.force; }catch(e){} }
+function clearLocal(){ localStorage.removeItem('livia_v3'); contractEl.value=''; apikeyEl.value=''; forceDemoEl.checked=false; alert('本地已清空'); }
 
-/* 显示错误/清理 */
-function showError(msg){ errorEl.textContent = msg; }
-function clearError(){ errorEl.textContent = ''; }
-
-/* 控制 loading bar */
-function setProgress(p){
-  progressFill.style.width = Math.min(100,Math.max(0,p)) + '%';
-}
-function startProgress(){
-  loadingEl.style.display = 'block';
-  setProgress(5);
-}
-function endProgress(){
-  setProgress(100);
-  setTimeout(()=>{ setProgress(0); loadingEl.style.display='none'; }, 400);
-}
-
-/* 示例数据生成（更丰富）*/
-function generateDemoHolders(count=20){
-  const holders = [];
-  let base = 500000;
-  for(let i=0;i<count;i++){
-    base = Math.floor(base * (0.6 + Math.random()*0.8));
-    holders.push({ address: '0x' + Math.random().toString(16).slice(2,18) + (i).toString(16), balance: base });
+/* demo data generators */
+function genHolders(n=30){
+  const arr=[]; let base = 800000;
+  for(let i=0;i<n;i++){
+    base = Math.floor(base * (0.55 + Math.random()*0.9));
+    arr.push({address:'0x'+Math.random().toString(16).slice(2,18)+i.toString(16), balance: base});
   }
-  // ensure sorted
-  holders.sort((a,b)=>b.balance-a.balance);
-  return holders;
+  arr.sort((a,b)=>b.balance-a.balance);
+  return arr;
 }
-function demoData(){
-  const holders = generateDemoHolders(30);
-  const totalSupply = holders.reduce((s,h)=>s+h.balance,0) + 200000;
-  return {holders, totalSupply};
-}
-
-/* fetchHolderList: 若用户提供 Key，可在此处扩展真实接口调用
-   当前逻辑：
-   - 若强制 demo 或没有 contract/API 则返回 demo
-   - 否则尝试调用对应 chain 接口（略，回退 demo）
-*/
-async function fetchHolderList(chain, contract, apiKey){
-  if(forceDemoEl.checked) return demoData();
-  if(!contract) return demoData();
-  // 如果没有 apiKey，回退 demo（避免跨域/限制）
-  if(!apiKey) return demoData();
-
-  // 这里为演示，我们直接回退 demo。你可在此处加入真实调用（BscScan/Etherscan/Covalent/Bitquery）
-  // try { ... real fetch ... } catch(e){ return demoData(); }
-  return demoData();
+function demoPayload(){
+  const holders = genHolders(40);
+  const total = holders.reduce((s,h)=>s+h.balance,0) + 300000;
+  const txs = [];
+  for(let i=0;i<8;i++){
+    txs.push({hash:'0x'+Math.random().toString(16).slice(2,18), type: Math.random()>0.5?'Buy':'Sell', amount:(Math.random()*1000).toFixed(2), time: (Math.floor(Math.random()*59)+1)+'m ago'});
+  }
+  return {holders, total, txs};
 }
 
-/* 渲染表格与概览 */
-function renderHolders(holders, totalSupply, chain){
-  if(!holders||holders.length===0){ holdersTable.innerHTML = '<div class="small">无持仓数据</div>'; return; }
-  let top = holders.slice(0,50);
+/* render holders table */
+function renderHoldersTable(holders, total, chain){
+  if(!holders || holders.length===0){ holdersDiv.innerHTML = '<div class="small muted">无持仓数据</div>'; return; }
   let html = '<table><thead><tr><th>地址</th><th>持仓</th><th>占比</th><th>鲸鱼</th><th>风险</th></tr></thead><tbody>';
-  let whaleCount = 0;
-  for(let h of top){
-    const ratio = (h.balance/totalSupply*100);
-    const ratioStr = ratio.toFixed(4);
+  let whaleCount=0;
+  holders.slice(0,50).forEach(h=>{
+    const ratio = h.balance / total * 100;
     const isWhale = ratio > 1;
     if(isWhale) whaleCount++;
-    const riskLevel = ratio > 50 ? '高' : (ratio > 5 ? '中' : '低');
+    const risk = ratio > 50 ? '高' : (ratio > 5 ? '中' : '低');
     html += `<tr class="${isWhale?'whale':''}">
-      <td><a href="https://${CHAIN_INFO[chain].scan}/address/${h.address}" class="addr" target="_blank">${h.address}</a></td>
+      <td><a class="addr" href="#">${h.address}</a></td>
       <td>${h.balance.toLocaleString()}</td>
-      <td>${ratioStr}%</td>
-      <td>${isWhale? 'Yes' : ''}</td>
-      <td class="${riskLevel==='高'?'red':'green'}">${riskLevel}</td>
+      <td>${ratio.toFixed(4)}%</td>
+      <td>${isWhale?'Yes':''}</td>
+      <td class="${risk==='高'?'red':'green'}">${risk}</td>
     </tr>`;
-  }
+  });
   html += '</tbody></table>';
-  holdersTable.innerHTML = html;
-
+  holdersDiv.innerHTML = html;
+  // bind click for modal (delegation)
+  const links = holdersDiv.querySelectorAll('a.addr');
+  links.forEach((a,i)=> a.addEventListener('click', (ev)=>{ ev.preventDefault(); openModal(holders[i]); }));
   // overview
   const top10 = holders.slice(0,10).reduce((s,h)=>s+h.balance,0);
-  const top10ratio = (top10/totalSupply*100).toFixed(2);
-  ovContract.textContent = tokenAddressEl.value || '(demo)';
-  ovSupply.textContent = totalSupply.toLocaleString();
-  ovTop10.textContent = top10ratio + '%';
-  ovWhales.textContent = whaleCount;
-
-  if(top10ratio > 50){
-    riskWarning.textContent = `警告：前10地址占比 ${top10ratio}%，风险极高（貔貅盘倾向）`;
-  } else if(top10ratio > 20){
-    riskWarning.textContent = `注意：前10地址占比 ${top10ratio}%，风险偏高`;
-  } else {
-    riskWarning.textContent = `前10地址占比 ${top10ratio}%，风险中等或较低`;
-  }
+  tokenTag.textContent = chain;
+  supplySummary.innerText = `总量（示例或估算）: ${total.toLocaleString()}`;
+  el('ov')?.remove?.();
+  // whales
+  whalesDiv.innerHTML = `<div class="small">鲸鱼 (>1%) 数量: ${whaleCount}</div>`;
 }
 
-/* 绘图 */
-function drawCharts(holders, totalSupply){
-  const lineCtx = lineCanvas.getContext('2d');
+/* draw charts */
+function drawLineAndPie(holders, total){
+  // line demo price
+  const labels=[]; const data=[];
+  let p = 1 + Math.random()*0.2;
+  for(let i=6;i>=0;i--){ labels.push('T-'+i); p *= (0.98 + Math.random()*0.06); data.push(Number(p.toFixed(3))); }
   if(lineChart) lineChart.destroy();
-  // price demo: generate small time series
-  const labels = [];
-  const data = [];
-  let basePrice = 1 + Math.random()*0.2;
-  for(let i=6;i>=0;i--){
-    labels.push(`T-${i}`);
-    basePrice *= (0.98 + Math.random()*0.06);
-    data.push(Number(basePrice.toFixed(3)));
-  }
-  lineChart = new Chart(lineCtx, {
-    type:'line',
-    data:{labels, datasets:[{label:'价格', data, borderColor:'#0af', backgroundColor:'rgba(10,170,255,0.08)', tension:0.25}]},
-    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}}
-  });
-
+  lineChart = new Chart(lineCtx, { type:'line', data:{labels, datasets:[{label:'价格', data, borderColor:'#16c0ff', backgroundColor:'rgba(22,192,255,0.08)', tension:0.25}]}, options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}}});
   // pie
-  const pieCtx = pieCanvas.getContext('2d');
-  if(pieChart) pieChart.destroy();
   const top = holders.slice(0,5);
   const others = holders.slice(5).reduce((s,h)=>s+h.balance,0);
   const labelsPie = top.map(h=>h.address.slice(0,8)+'...').concat(['Others']);
   const dataPie = top.map(h=>h.balance).concat([others]);
-  pieChart = new Chart(pieCtx, {
-    type:'pie',
-    data:{labels: labelsPie, datasets:[{data: dataPie, backgroundColor:['#0af','#6fe38b','#ff8b8b','#ffb86b','#9b59b6','#888'] }]},
-    options:{responsive:true, maintainAspectRatio:false}
-  });
+  if(pieChart) pieChart.destroy();
+  pieChart = new Chart(pieCtx, { type:'pie', data:{labels:labelsPie, datasets:[{data:dataPie, backgroundColor:['#16c0ff','#6fe38b','#ff8b8b','#ffb86b','#9b59b6','#8fa8ff']}]}, options:{responsive:true, maintainAspectRatio:false}});
 }
 
-/* 流动性 & 合约安全（演示） */
-function renderLiquidityAndSecurity(chain, contract){
-  // 演示：随机生成 LP 比例与锁仓情况
-  const lpLocked = Math.random() > 0.5;
-  const lpPercent = Math.floor(10 + Math.random()*40);
-  const hasMint = Math.random() > 0.6;
-  const ownerSet = Math.random() > 0.5;
+/* render tx list and liquidity */
+function renderTxAndLiquidity(txs){
+  txList.innerHTML = txs.map(t=>`<div style="padding:6px 0;border-bottom:1px dashed rgba(255,255,255,0.02)"><strong>${t.type}</strong> ${t.amount} • <span class="small muted">${t.time}</span></div>`).join('');
+  liquidityDiv.innerHTML = `<div>LP 锁仓（示例）: <strong>${Math.random()>0.5?'已锁':'未锁'}</strong></div><div>LP 占比（示例）： <strong>${(10+Math.floor(Math.random()*50))}%</strong></div>`;
+}
 
-  liquidityInfo.innerHTML = `
-    <div>示例流动性池锁仓: <strong>${lpLocked ? '有（演示）' : '无（演示）'}</strong></div>
-    <div>LP 占比（示例）: <strong>${lpPercent}%</strong></div>
-    <div>合约可 mint（示例）: <strong class="${hasMint?'red':'green'}">${hasMint?'可能存在':'未检测到'}</strong></div>
-    <div>合约是否有 Owner（示例）: <strong>${ownerSet ? '是' : '否'}</strong></div>
-    <div class="small">提示：以上检测为静态示例。接入真实 API 后可进行 on-chain ABI 分析与合约函数检测。</div>
+/* contract security demo */
+function renderContractSecurity(){
+  const mint = Math.random()>0.7;
+  const owner = Math.random()>0.5;
+  const blacklist = Math.random()>0.85;
+  contractSecurity.innerHTML = `
+    <div>可 Mint: <strong class="${mint?'red':'green'}">${mint? '是':'否'}</strong></div>
+    <div>合约 Owner 存在: <strong>${owner? '是':'否'}</strong></div>
+    <div>Blacklist 逻辑: <strong class="${blacklist?'red':'green'}">${blacklist? '可能':'未检测'}</strong></div>
+    <div class="small muted">提示：以上为演示检测。接入真实 ABI/交易分析可得实测结果。</div>
   `;
 }
 
-/* 导出折线图 */
-exportBtn.addEventListener('click', ()=>{
-  if(!lineChart){ alert('请先加载数据生成图表'); return; }
-  const a = document.createElement('a');
-  a.href = lineChart.toBase64Image();
-  a.download = 'livia_linechart.png';
-  a.click();
-});
-
-/* 点击地址打开 modal */
-holdersTable.addEventListener('click', (ev)=>{
-  const a = ev.target.closest('a.addr');
-  // in our table class we used class 'addr' earlier? ensure selection by tagName
-  if(!a) {
-    // fallback: if clicked td -> find link
-    const link = ev.target.closest('td') && ev.target.closest('td').querySelector('a');
-    if(link) {
-      openModalWithAddress(link.textContent);
-    }
-    return;
-  }
-  openModalWithAddress(a.textContent);
-});
-function openModalWithAddress(address){
-  modalContent.innerHTML = `<h3>地址详情（演示）</h3>
-    <p>${address}</p>
-    <p>示例信息：可列出交易、增持/减持、代币余额等</p>`;
-  modal.style.display = 'block';
+/* open modal */
+function openModal(holder){
+  modalContent.innerHTML = `<h3>地址详情</h3><div>地址: ${holder.address}</div><div>余额: ${holder.balance.toLocaleString()}</div><div class="small muted" style="margin-top:8px">示例交易与持仓详情可在此展示（可扩展）</div>`;
+  txModal.style.display = 'block';
 }
-closeBtn.addEventListener('click', ()=> modal.style.display='none');
 
-/* 主流程 */
+/* close modal */
+closeBtnEl.addEventListener('click', ()=> txModal.style.display='none');
+
+/* export functions */
+exportLine.addEventListener('click', ()=>{
+  if(!lineChart){ alert('请先生成图表'); return; }
+  const a = document.createElement('a'); a.href = lineChart.toBase64Image(); a.download = 'livia_line.png'; a.click();
+});
+exportPie.addEventListener('click', ()=>{
+  if(!pieChart){ alert('请先生成图表'); return; }
+  const a = document.createElement('a'); a.href = pieChart.toBase64Image(); a.download = 'livia_pie.png'; a.click();
+});
+
+/* CSV 导出 (holders) */
+function exportCSV(holders){
+  if(!holders||holders.length===0){ alert('无持仓数据'); return; }
+  const rows = [['address','balance']];
+  holders.forEach(h=> rows.push([h.address, h.balance]));
+  const csv = rows.map(r=>r.join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'}); const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'holders.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* main load (demo-first). If user provides API Key + not forceDemo, can insert real fetch logic in fetchHolders() */
 async function mainLoad(){
-  clearError();
-  const chain = chainSelect.value;
-  const contract = tokenAddressEl.value.trim();
-  const apiKey = apiKeyEl.value.trim();
+  setError('');
+  const chain = chainEl.value;
+  const contract = contractEl.value.trim();
+  const apikey = apikeyEl.value.trim();
+  const useDemo = forceDemoEl.checked || viewMode.value === 'demo' || !contract || !apikey;
 
-  if(!contract && !forceDemoEl.checked){
-    showError('请输入合约地址或勾选强制示例数据（force demo）');
-    return;
-  }
-  startProgress();
-  // 1. 获取 holders（会自动回退 demo）
-  const data = await fetchHolderList(chain, contract, apiKey);
-  // slight delay for UX
-  await new Promise(r=>setTimeout(r, 800));
-  const holders = data.holders || [];
-  const totalSupply = data.totalSupply || holders.reduce((s,h)=>s+h.balance,0) || 100000;
-  if(holders.length < 6){
-    // 合并 demo 补足
-    const demo = demoData().holders;
-    const map = {};
-    holders.concat(demo).forEach(h => map[h.address] = (map[h.address]||0) + h.balance);
-    const merged = Object.keys(map).map(a=>({address:a,balance:map[a]})).sort((a,b)=>b.balance-a.balance);
-    renderHolders(merged.slice(0,30), totalSupply, chain);
-    drawCharts(merged.slice(0,30), totalSupply);
-  } else {
-    holders.sort((a,b)=>b.balance-a.balance);
-    renderHolders(holders.slice(0,50), totalSupply, chain);
-    drawCharts(holders, totalSupply);
-  }
-
-  renderLiquidityAndSecurity(chain, contract);
-  endProgress();
-
-  // save current state locally automatically
-  localStorage.setItem('livia_v2_state', JSON.stringify({chain:chain, token:contract, apiKey:apiKey, forceDemo:forceDemoEl.checked}));
+  // UX
+  setProgress(5);
+  supplySummary.innerText = '加载中…';
+  // attempt to fetch holders (demo by default)
+  const data = await fetchHolders(chain, contract, apikey, useDemo);
+  await sleep(600);
+  // render
+  renderHoldersTable(data.holders, data.total, chain);
+  drawLineAndPie(data.holders, data.total);
+  renderTxAndLiquidity(data.txs);
+  renderContractSecurity();
+  riskBox.innerHTML = `<div>前10占比示例：${(data.holders.slice(0,10).reduce((s,h)=>s+h.balance,0)/data.total*100).toFixed(2)}%</div>`;
+  setProgress(100);
+  setTimeout(()=> setProgress(0), 400);
+  // auto-save
+  localStorage.setItem('livia_v3', JSON.stringify({chain:chain, contract:contract, apikey:apikey, force:forceDemoEl.checked}));
 }
 
-/* auto refresh */
-function startAutoRefresh(){
-  if(autoRefreshTimer) clearInterval(autoRefreshTimer);
-  if(autoRefreshEl.checked){
-    autoRefreshTimer = setInterval(()=>{ mainLoad(); }, 60000);
+/* fetchHolders: 如需接真实 API，替换体内逻辑 */
+async function fetchHolders(chain, contract, apikey, forceDemo){
+  // If forced demo or missing contract/apikey: return demo
+  if(forceDemo || !contract || !apikey){ 
+    const demo = demoPayload();
+    return {holders:demo.holders, total:demo.total, txs:demo.txs};
+  }
+
+  // ====== 真实 API 插入点（此处为演示回退逻辑） ======
+  // 你可以在这里实现：
+  // - BSC: https://api.bscscan.com/api?module=token&action=tokenholderlist...
+  // - ETH: https://api.etherscan.io/api?...
+  // - Solana: solscan / public APIs
+  // 对于更稳定和更详细的 holder 列表，建议使用 Covalent / Bitquery（付费）
+  // 如果你需要我帮你直接接入某一 API，请告诉我你要用哪家并提供 Key（或我帮你把调用写好，Key 你后续填）
+
+  // 临时：如果尝试真实请求失败，回退 demo
+  try{
+    // (示例) attempt a fetch but most public endpoints won't return holder lists
+    // return demo if network fails
+    // fetch(...) ...
+    // throw to demo
+    throw 'demo-mode';
+  }catch(e){
+    const demo = demoPayload();
+    return {holders:demo.holders, total:demo.total, txs:demo.txs};
   }
 }
-autoRefreshEl.addEventListener('change', startAutoRefresh);
 
-/* event bindings */
+/* quick search sample — map some names to demo contracts */
+const sampleMap = {
+  'LIVIAAI':'0xa1ccb47228c77a84e416b480163c7ee6a0ed9c74',
+  'LINDAAI':'0xa1ccb47228c77a84e416b480163c7ee6a0ed9c74',
+  'LINDA':'0xdd470f2d3e25c3b58c47753b398911ecc3f7c9e0'
+};
+searchBtn.addEventListener('click', ()=>{ const q=quickSearch.value.trim(); if(sampleMap[q]){ contractEl.value=sampleMap[q]; forceDemoEl.checked=true; mainLoad(); } else { alert('未找到示例映射，直接尝试加载（若无 API Key 将使用示例数据）'); mainLoad(); }});
+quickSearch.addEventListener('keypress', (e)=>{ if(e.key==='Enter') searchBtn.click(); });
+
+/* misc bindings */
 loadBtn.addEventListener('click', mainLoad);
 saveBtn.addEventListener('click', saveLocal);
-clearBtn.addEventListener('click', clearLocal);
-loadLocal();
-startAutoRefresh();
+demoBtn.addEventListener('click', ()=>{ forceDemoEl.checked=true; mainLoad(); });
+clearLocalBtn.addEventListener('click', clearLocal);
+document.getElementById('demoBtn').addEventListener('click', ()=>{ forceDemoEl.checked=true; mainLoad(); });
 
-/* Service Worker（简易）*/
+/* load local on start */
+loadLocal();
+
+/* ServiceWorker (simple cache, optional) */
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('data:application/javascript;base64,'+btoa(
     `self.addEventListener('install',e=>self.skipWaiting());
      self.addEventListener('fetch',e=>e.respondWith(fetch(e.request).catch(()=>caches.match(e.request))))`
   ));
 }
+
+/* Auto load demo on first open for UX */
+if(!localStorage.getItem('livia_v3')){
+  forceDemoEl.checked = true;
+  // prefill contract sample
+  contractEl.value = '0xa1ccb47228c77a84e416b480163c7ee6a0ed9c74';
+  mainLoad();
+}
+
 </script>
 </body>
 </html>
