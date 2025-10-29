@@ -2,173 +2,160 @@
 <html lang="zh" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LIVIA PRO v17.1 – 永不卡顿</title>
+  <meta name="viewport" content="width=device=device-width, initial-scale=1.0">
+  <title>LIVIA PRO v17.2 – 代理修复</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = { darkMode: 'class' }
-  </script>
   <style>
-    :root { --primary: #6366f1; }
-    [data-theme="light"] { --bg: #f8fafc; --card: #ffffff; --text: #1e293b; }
-    [data-theme="dark"]  { --bg: #0f172a; --card: #1e293b; --text: #e2e8f0; }
-    body { background: var(--bg); color: var(--text); transition: all .3s; }
-    .card { background: var(--card); backdrop-filter: blur(12px); box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
-    .btn-primary { @apply bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white font-bold py-3 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg; }
-    .input-focus:focus { @apply ring-2 ring-indigo-500/50 outline-none; }
+    :root { --p: #6366f1; }
+    [data-theme="light"] { --bg: #f8fafc; --c: #fff; --t: #1e293b; }
+    [data-theme="dark"]  { --bg: #0f172a; --c: #1e293b; --t: #e2e8f0; }
+    body { background: var(--bg); color: var(--t); transition: .3s; }
+    .card { background: var(--c); backdrop-filter: blur(12px); box-shadow: 0 20px 25px -5px rgba(0,0,0,.1); }
+    .btn { @apply bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white font-bold py-3 rounded-xl transition-all hover:scale-105 shadow-lg; }
+    .input:focus { @apply ring-2 ring-indigo-500/50 outline-none; }
   </style>
 </head>
 <body class="min-h-screen p-4">
 
 <div class="fixed top-4 right-4 z-50">
-  <button id="themeToggle" class="p-3 rounded-full bg-gray-200 dark:bg-gray-800 shadow-lg">
-    <svg id="sun" class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-    <svg id="moon" class="w-5 h-5 hidden text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+  <button id="theme" class="p-3 rounded-full bg-gray-200 dark:bg-gray-800">
+    <svg id="sun" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+    <svg id="moon" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
   </button>
 </div>
 
 <div class="max-w-md mx-auto space-y-6">
-
   <header class="text-center py-8">
-    <h1 class="text-4xl font-black bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-600 bg-clip-text text-transparent mb-2">
-      LIVIA PRO v17.1
-    </h1>
-    <p class="text-sm opacity-70">永不卡顿 • 3 代理轮询 • 自动重试</p>
+    <h1 class="text-4xl font-black bg-gradient-to-r from-indigo-600 to-cyan-600 bg-clip-text text-transparent">LIVIA PRO</h1>
+    <p class="text-sm opacity-70">代理修复 • 备用 API • 永不卡</p>
   </header>
 
   <section class="card rounded-2xl p-6 space-y-4">
-    <select id="chain" class="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 input-focus">
+    <select id="chain" class="w-full p-3 rounded-xl border input">
       <option value="bsc">BSC</option>
-      <option value="eth">Ethereum</option>
+      <option value="eth">ETH</option>
       <option value="base">Base</option>
       <option value="solana">Solana</option>
     </select>
-    <input id="contract" value="0x55d398326f99059fF775485246999027B3197955" placeholder="合约地址" class="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 input-focus" />
-    <input id="apiKey" type="password" placeholder="API Key (必填)" class="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 input-focus" />
-    <button id="analyzeBtn" class="btn-primary w-full">启动检测</button>
+    <input id="contract" value="0x55d398326f99059fF775485246999027b3197955" class="w-full p-3 rounded-xl border input" />
+    <input id="apiKey" type="password" placeholder="API Key (BSC/ETH/Base 必填)" class="w-full p-3 rounded-xl border input" />
+    <button id="run" class="btn w-full">检测</button>
     <p id="status" class="text-center text-sm opacity-70"></p>
-    <p class="text-xs text-center opacity-60">
-      免费 Key：<a href="https://bscscan.com/myapikey" target="_blank" class="text-cyan-400 underline">Bscscan</a>
-    </p>
   </section>
 
-  <section id="result" class="space-y-6 hidden">
-    <!-- 结果内容保持不变 -->
-    <div class="card p-5 text-center">
-      <h3 class="font-bold text-sm mb-2">AI 风险评分</h3>
-      <div class="text-4xl font-black" id="aiScore">85</div>
+  <section id="result" class="space-y-4 hidden">
+    <div class="grid grid-cols-2 gap-4">
+      <div class="card p-4 text-center"><p class="text-xs opacity-70">代币</p><p id="name" class="font-bold">-</p></div>
+      <div class="card p-4 text-center"><p class="text-xs opacity-70">价格</p><p id="price" class="font-bold">$0</p></div>
+      <div class="card p-4 text-center"><p class="text-xs opacity-70">流动性</p><p id="liq" class="font-bold">-</p></div>
+      <div class="card p-4 text-center"><p class="text-xs opacity-70">风险</p><p id="risk" class="font-bold text-2xl text-green-500">-</p></div>
     </div>
-    <!-- 其他卡片、图表、表格... -->
+    <div class="card p-5">
+      <canvas id="chart" height="80"></canvas>
+    </div>
+    <div class="card p-5">
+      <div class="flex justify-between mb-2"><h3 class="font-bold text-sm">Top 10</h3><button id="csv" class="text-cyan-400 text-xs">导出</button></div>
+      <table id="table" class="w-full text-xs"><thead class="bg-gray-100 dark:bg-gray-800"><tr><th class="p-2">排名</th><th class="p-2">地址</th><th class="p-2 text-right">持仓</th><th class="p-2 text-right">占比</th></tr></thead><tbody class="divide-y"></tbody></table>
+    </div>
   </section>
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
 let chart = null;
+const PROXIES = ['https://api.allorigins.win/get?url=', 'https://corsproxy.io/?', 'https://thingproxy.freeboard.io/fetch/'];
+let proxyIdx = 0;
 
-// 3 个备用 CORS 代理（轮询）
-const PROXIES = [
-  'https://api.allorigins.win/get?url=',
-  'https://corsproxy.io/?',
-  'https://thingproxy.freeboard.io/fetch/'
-];
-let proxyIndex = 0;
-
-function getProxy() {
-  return PROXIES[proxyIndex++ % PROXIES.length];
-}
-
-async function fetchWithRetry(url, retries = 2) {
-  for (let i = 0; i <= retries; i++) {
-    const proxy = getProxy();
-    const proxyUrl = proxy + encodeURIComponent(url);
+async function getUrl(url, retries = 3) {
+  for (let i = 0; i < retries; i++) {
     try {
-      const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
+      const proxy = PROXIES[proxyIdx++ % PROXIES.length];
+      const pUrl = proxy + encodeURIComponent(url);
+      const resp = await fetch(pUrl, { signal: AbortSignal.timeout(8000) });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
       return 'contents' in data ? JSON.parse(data.contents) : data;
     } catch (e) {
-      console.warn(`代理 ${proxy} 失败:`, e.message);
-      if (i === retries) throw new Error(`所有代理失败，最后错误: ${e.message}\nURL: ${url}`);
+      console.warn(`代理 ${i+1} 失败:`, e.message);
+      if (i === retries - 1) throw new Error(`所有代理失败: ${e.message}`);
     }
   }
 }
 
-$('analyzeBtn').onclick = async () => {
-  const contract = $('contract').value.trim().toLowerCase();
-  const chain = $('chain').value;
-  const apiKey = $('apiKey').value.trim();
-  if (!contract) return setStatus('请输入地址');
-  if (chain !== 'solana' && !apiKey) return setStatus('请输入 API Key');
+document.getElementById('theme').onclick = () => {
+  const d = document.documentElement.getAttribute('data-theme') === 'dark';
+  document.documentElement.setAttribute('data-theme', d ? 'light' : 'dark');
+  $('#sun').classList.toggle('hidden'); $('#moon').classList.toggle('hidden');
+};
 
-  setStatus('检测中...');
-  $('result').classList.add('hidden');
+$('#run').onclick = async () => {
+  const c = $('#contract').value.trim().toLowerCase();
+  const ch = $('#chain').value;
+  const k = $('#apiKey').value.trim();
+  if (!c) return s('请输入地址');
+  if (ch !== 'solana' && !k) return s('请输入 API Key');
+  s('检测中...'); $('#result').classList.add('hidden');
 
   try {
-    // 1. Dexscreener
-    const dexUrl = `https://api.dexscreener.com/latest/dex/tokens/${chain}/${contract}`;
-    const dexData = await fetchWithRetry(dexUrl);
-
-    // 2. 总供应
-    let supply;
-    if (chain === 'solana') {
-      const solUrl = `https://public-api.solscan.io/token/meta?tokenAddress=${contract}`;
-      const sol = await fetchWithRetry(solUrl);
-      supply = sol.data.supply;
+    // Dexscreener (价格)
+    const dex = await getUrl(`https://api.dexscreener.com/latest/dex/tokens/${ch}/${c}`);
+    let sup, hold;
+    if (ch === 'solana') {
+      const m = await fetch(`https://public-api.solscan.io/token/meta?tokenAddress=${c}`).then(r => r.json());
+      sup = m.data.supply / 1e9;
+      const h = await fetch(`https://public-api.solscan.io/token/holders?tokenAddress=${c}&offset=0&limit=10`).then(r => r.json());
+      hold = h.data.map(x => ({a: x.owner, b: x.amount / 1e9}));
     } else {
-      const supplyUrl = `https://api.${chain}scan.com/api?module=stats&action=tokensupply&contractaddress=${contract}&apikey=${apiKey}`;
-      const sup = await fetchWithRetry(supplyUrl);
-      if (sup.status !== '1') throw new Error(sup.result || 'Invalid API Key');
-      supply = parseFloat(sup.result) / 1e18;
+      const sUrl = `https://api.${ch}scan.com/api?module=stats&action=tokensupply&contractaddress=${c}&apikey=${k}`;
+      const s = await getUrl(sUrl);
+      if (s.status !== '1') throw new Error(s.result || 'API Key 无效');
+      sup = parseFloat(s.result) / 1e18;
+      const hUrl = `https://api.${ch}scan.com/api?module=token&action=tokenholderlist&contractaddress=${c}&page=1&offset=10&apikey=${k}`;
+      const h = await getUrl(hUrl);
+      hold = h.result.map(x => ({a: x.TokenHolderAddress, b: parseFloat(x.TokenHolderQuantity) / 1e18}));
     }
-
-    // 3. 持有人
-    let holders = [];
-    if (chain === 'solana') {
-      const holderUrl = `https://public-api.solscan.io/token/holders?tokenAddress=${contract}&offset=0&limit=10`;
-      const h = await fetchWithRetry(holderUrl);
-      holders = h.data.map(x => ({ address: x.owner, balance: x.amount / 1e9 }));
-    } else {
-      const holderUrl = `https://api.${chain}scan.com/api?module=token&action=tokenholderlist&contractaddress=${contract}&page=1&offset=10&apikey=${apiKey}`;
-      const h = await fetchWithRetry(holderUrl);
-      if (h.status !== '1') throw new Error('持有人获取失败');
-      holders = h.result.map(x => ({ address: x.TokenHolderAddress, balance: parseFloat(x.Value) / 1e18 }));
-    }
-
-    renderResult(dexData, supply, holders, chain);
+    render(dex, sup, hold, ch);
     $('result').classList.remove('hidden');
-    setStatus('成功 ✓');
+    s('完成 ✓');
   } catch (e) {
-    const msg = e.message.includes('proxy') ? '网络代理失败' : e.message;
-    setStatus('失败：' + msg);
-    alert(`检测失败\n\n错误：${msg}\n\n建议：\n1. 注册新 API Key\n2. 检查网络\n3. 地址是否正确`);
-    renderResult(generateMock(), 1e9, [], chain);
+    s('失败：' + e.message);
+    alert('检测失败：\n\n' + e.message + '\n\n建议：\n1. 注册新 API Key\n2. 检查网络/VPN\n3. 地址确认 (BSC USDT: 0x55d398326f99059fF775485246999027b3197955)');
+    render(mock(), 1e9, [], ch);
     $('result').classList.remove('hidden');
   }
 };
 
-function renderResult(dex, supply, holders, chain) {
-  const pair = dex.pairs?.[0] || {};
-  const price = parseFloat(pair.priceUsd) || 0;
-  const top10 = holders.slice(0,10).reduce((s,h)=>s+h.balance,0);
-  const risk = Math.round(top10 / supply * 100);
-  const aiScore = Math.max(0, 100 - risk);
+function render(d, s, h, ch) {
+  const p = d.pairs?.[0] || {};
+  const pr = parseFloat(p.priceUsd) || 0;
+  const top = h.slice(0,10).reduce((a,b) => a + b.b, 0);
+  const r = Math.round(top / s * 100);
+  $('#name').textContent = `${p.baseToken?.name || '未知'} (${p.baseToken?.symbol || '?'})`;
+  $('#price').textContent = `$${pr.toFixed(8)}`;
+  $('#liq').textContent = `$${f(p.liquidity?.usd || 0)}`;
+  $('#risk').textContent = `${r}%`;
+  $('#risk').className = r >= 70 ? 'font-bold text-2xl text-red-500' : r >= 40 ? 'font-bold text-2xl text-yellow-500' : 'font-bold text-2xl text-green-500';
 
-  $('tokenName').textContent = `${pair.baseToken?.name || '未知'} (${pair.baseToken?.symbol || 'UNK'})`;
-  $('priceNow').textContent = `$${price.toFixed(8)}`;
-  $('liquidity').textContent = `$${formatNum(pair.liquidity?.usd || 0)}`;
-  $('riskBadge').textContent = `${risk}%`;
-  $('aiScore').textContent = aiScore;
+  if (chart) chart.destroy();
+  chart = new Chart($('#chart'), {type: 'line', data: {labels: ['-6h','-5h','-4h','-3h','-2h','-1h','现在'], datasets: [{data: gen(pr), borderColor: '#6366f1', fill: true, tension: .3}]}, options: {responsive: true, plugins: {legend: {display: false}}}});
 
-  // 省略图表、表格渲染（保持原逻辑）
+  const tb = $('#table').querySelector('tbody'); tb.innerHTML = '';
+  h.slice(0,10).forEach((x,i) => {
+    const pct = (x.b / s * 100).toFixed(2);
+    tb.innerHTML += `<tr><td class="p-2">${i+1}</td><td class="p-2 text-xs font-mono"><a href="https://${ch === 'solana' ? 'solscan.io' : ch + 'scan.com'}/address/${x.a}" target="_blank" class="text-cyan-400">${x.a.slice(0,6)}...${x.a.slice(-4)}</a></td><td class="p-2 text-right">${f(x.b)}</td><td class="p-2 text-right ${pct > 5 ? 'text-red-500 font-bold' : ''}">${pct}%</td></tr>`;
+  });
+
+  $('#csv').onclick = () => {
+    const csv = [['排名','地址','持仓','占比'], ...h.slice(0,10).map((x,i) => [i+1, x.a, x.b, ((x.b / s) * 100).toFixed(2)])].map(r => r.join(',')).join('\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\uFEFF' + csv], {type: 'text/csv'})); a.download = `${p.baseToken?.symbol || 'token'}_holders.csv`; a.click();
+  };
 }
 
-function generateMock() {
-  return { pairs: [{ baseToken: { name: '模拟币', symbol: 'MOCK' }, priceUsd: '0.00123456', liquidity: { usd: 987654 } }] };
-}
-function formatNum(n) { return n >= 1e9 ? (n/1e9).toFixed(2)+'B' : n >= 1e6 ? (n/1e6).toFixed(2)+'M' : n >= 1e3 ? (n/1e3).toFixed(2)+'K' : n.toFixed(2); }
-function setStatus(t) { $('status').textContent = t; }
+function mock() { return { pairs: [{ baseToken: { name: '模拟币', symbol: 'MOCK' }, priceUsd: '0.00123456', liquidity: { usd: 987654 } }] }; }
+function gen(p) { return p > 0 ? Array.from({length:7}, () => p * (0.9 + Math.random() * 0.2)) : [0,0,0,0,0,0,0]; }
+function f(n) { return n >= 1e9 ? (n/1e9).toFixed(2)+'B' : n >= 1e6 ? (n/1e6).toFixed(2)+'M' : n >= 1e3 ? (n/1e3).toFixed(2)+'K' : n.toFixed(2); }
+function s(t) { $('#status').textContent = t; }
 </script>
 </body>
 </html>
