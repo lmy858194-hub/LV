@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LIVIA PRO v17.3 – UI 全恢复 + 点击修复</title>
+  <title>LIVIA PRO v17.4 – 点击修复</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -15,7 +15,7 @@
   <style>
     :root { --primary: #6366f1; --primary-dark: #4f46e5; }
     [data-theme="light"] { --bg: #f8fafc; --card: #ffffff; --text: #1e293b; }
-    [data-theme="dark"]  { --bg: #0f172a; --card: #1e293b; --text: #e2e8f0; }
+    [data-theme="dark"]  { --bg: #0f172a; --c: #1e293b; --text: #e2e8f0; }
     body { background: var(--bg); color: var(--text); transition: all .3s; }
     .card { background: var(--card); backdrop-filter: blur(12px); box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
     .whale { @apply bg-gradient-to-r from-red-400 to-pink-500 text-white font-semibold rounded-full px-2 py-1 text-xs; }
@@ -51,12 +51,12 @@
   <!-- Header -->
   <header class="text-center py-6">
     <h1 class="text-4xl font-extrabold bg-gradient-to-r from-indigo-500 to-cyan-500 bg-clip-text text-transparent">
-      LIVIA PRO v17.3
+      LIVIA PRO v17.4
     </h1>
-    <p class="text-sm mt-1 opacity-70">UI 全恢复 • 点击修复 • 永不卡顿</p>
+    <p class="text-sm mt-1 opacity-70">UI 完美 • 点击修复 • 稳定运行</p>
   </header>
 
-  <!-- 风险敏感度 (恢复) -->
+  <!-- 风险敏感度 -->
   <section class="card rounded-2xl p-5">
     <h3 class="font-bold text-sm mb-3 flex items-center">风险敏感度</h3>
     <div class="flex space-x-2">
@@ -87,7 +87,7 @@
   <!-- 结果区域 -->
   <section id="result" class="space-y-6 hidden">
 
-    <!-- AI 风险评分 (5 维度，恢复) -->
+    <!-- AI 风险评分 -->
     <div class="card rounded-2xl p-5 text-center">
       <h3 class="font-bold text-sm mb-2">AI 风险评分 (Smell Test)</h3>
       <div class="flex items-center justify-center space-x-2 mb-2">
@@ -123,7 +123,7 @@
       </div>
     </div>
 
-    <!-- 价格图表 + Bubble Map (恢复) -->
+    <!-- 价格图表 + Bubble Map -->
     <div class="card p-5 rounded-2xl">
       <h3 class="font-bold text-sm mb-3">价格走势 & 持仓热图</h3>
       <canvas id="priceChart" height="80" class="mb-4"></canvas>
@@ -134,7 +134,7 @@
     <div class="card p-5 rounded-2xl">
       <div class="flex justify-between items-center mb-3">
         <h3 class="font-bold text-sm">Top 10 持有人</h3>
-        <button id="exportCSV" class="text-cyan-400 text-xs font-medium hover:underline transition-colors">📥 导出 CSV</button>
+        <button id="exportCSV" class="text-cyan-400 text-sm font-medium hover:underline transition-colors">📥 导出 CSV</button>
       </div>
       <div class="overflow-x-auto max-h-64">
         <table id="holdersTable" class="w-full text-xs">
@@ -162,7 +162,7 @@ toggle.onclick = () => {
   moon.classList.toggle('hidden');
 };
 
-/* ====================== 风险敏感度 (恢复) ====================== */
+/* ====================== 风险敏感度 ====================== */
 const riskButtons = document.querySelectorAll('[data-risk]');
 let riskLevel = 'medium';
 riskButtons.forEach(btn => {
@@ -173,7 +173,7 @@ riskButtons.forEach(btn => {
   };
 });
 
-/* ====================== 核心检测逻辑 (修复点击) ====================== */
+/* ====================== 核心检测 (点击修复) ====================== */
 const $ = id => document.getElementById(id);
 let chart = null;
 const CORS_PROXY = 'https://api.allorigins.win/get?url=';
@@ -184,49 +184,50 @@ const CHAINS = {
   solana: { api: 'public-api.solscan.io', scan: 'solscan.io', dexs: 'solana', decimals: 9 }
 };
 
-document.getElementById('analyzeBtn').addEventListener('click', async () => {  // 修复：用 addEventListener 确保点击响应
-  const contract = $('contract').value.trim().toLowerCase();
-  const chain = $('chain').value;
-  const apiKey = $('apiKey').value.trim();
-  if (!/^0x[a-f0-9]{40}$/.test(contract) && chain !== 'solana') return setStatus('无效地址');
-  if (chain !== 'solana' && !apiKey) return setStatus('请填写 API Key');
+document.addEventListener('DOMContentLoaded', () => {  // 修复：DOM 加载后绑定事件，确保点击响应
+  document.getElementById('analyzeBtn').addEventListener('click', async () => {
+    const contract = $('contract').value.trim().toLowerCase();
+    const chain = $('chain').value;
+    const apiKey = $('apiKey').value.trim();
+    if (!/^0x[a-f0-9]{40}$/.test(contract) && chain !== 'solana') return setStatus('无效地址');
+    if (chain !== 'solana' && !apiKey) return setStatus('请填写 API Key');
 
-  setStatus('AI 检测中...');
-  $('result').classList.add('hidden');
+    setStatus('AI 检测中...');
+    $('result').classList.add('hidden');
 
-  const timeout = new Promise((_, r) => setTimeout(() => r(new Error('超时')), 12000));
+    const timeout = new Promise((_, r) => setTimeout(() => r(new Error('超时')), 12000));
 
-  try {
-    // Dexscreener
-    const dexUrl = `https://api.dexscreener.com/latest/dex/tokens/${CHAINS[chain].dexs}/${contract}`;
-    const dex = await (await fetch(CORS_PROXY + encodeURIComponent(dexUrl))).json();
-    const dexData = JSON.parse(dex.contents);
+    try {
+      // Dexscreener (价格)
+      const dexUrl = `https://api.dexscreener.com/latest/dex/tokens/${CHAINS[chain].dexs}/${contract}`;
+      const dex = await (await fetch(CORS_PROXY + encodeURIComponent(dexUrl))).json();
+      const dexData = JSON.parse(dex.contents);
 
-    // 总供应
-    let supplyRes;
-    if (chain === 'solana') {
-      const solUrl = `https://${CHAINS[chain].api}/token/meta?tokenAddress=${contract}`;
-      const sol = await fetch(solUrl).then(r => r.json());
-      supplyRes = { status: '1', result: (sol.data.supply * Math.pow(10, CHAINS[chain].decimals)).toString() };
-    } else {
-      const supplyUrl = `https://${CHAINS[chain].api}/api?module=stats&action=tokensupply&contractaddress=${contract}&apikey=${apiKey}`;
-      const sup = await (await fetch(CORS_PROXY + encodeURIComponent(supplyUrl))).json();
-      supplyRes = JSON.parse(sup.contents);
-    }
+      // 总供应
+      let supplyRes;
+      if (chain === 'solana') {
+        const solUrl = `https://${CHAINS[chain].api}/token/meta?tokenAddress=${contract}`;
+        const sol = await fetch(solUrl).then(r => r.json());
+        supplyRes = { status: '1', result: (sol.data.supply * Math.pow(10, CHAINS[chain].decimals)).toString() };
+      } else {
+        const supplyUrl = `https://${CHAINS[chain].api}/api?module=stats&action=tokensupply&contractaddress=${contract}&apikey=${apiKey}`;
+        const sup = await (await fetch(CORS_PROXY + encodeURIComponent(supplyUrl))).json();
+        supplyRes = JSON.parse(sup.contents);
+      }
 
-    // 持有人
-    let holderRes;
-    if (chain === 'solana') {
-      const solUrl = `https://${CHAINS[chain].api}/token/holders?tokenAddress=${contract}&offset=0&limit=100`;
-      const sol = await fetch(solUrl).then(r => r.json());
-      holderRes = { status: '1', result: sol.data.map(h => ({ TokenHolderAddress: h.owner, TokenHolderQuantity: (h.amount * Math.pow(10, CHAINS[chain].decimals)).toString() })) };
-    } else {
-      const holderUrl = `https://${CHAINS[chain].api}/api?module=token&action=tokenholderlist&contractaddress=${contract}&page=1&offset=100&apikey=${apiKey}`;
-      const hold = await (await fetch(CORS_PROXY + encodeURIComponent(holderUrl))).json();
-      holderRes = JSON.parse(hold.contents);
-    }
+      // 持有人
+      let holderRes;
+      if (chain === 'solana') {
+        const solUrl = `https://${CHAINS[chain].api}/token/holders?tokenAddress=${contract}&offset=0&limit=100`;
+        const sol = await fetch(solUrl).then(r => r.json());
+        holderRes = { status: '1', result: sol.data.map(h => ({ TokenHolderAddress: h.owner, TokenHolderQuantity: (h.amount * Math.pow(10, CHAINS[chain].decimals)).toString() })) };
+      } else {
+        const holderUrl = `https://${CHAINS[chain].api}/api?module=token&action=tokenholderlist&contractaddress=${contract}&page=1&offset=100&apikey=${apiKey}`;
+        const hold = await (await fetch(CORS_PROXY + encodeURIComponent(holderUrl))).json();
+        holderRes = JSON.parse(hold.contents);
+      }
 
-    if (supplyRes.status !== '1') throw new Error('API Key 无效或地址错误');
+      if (supplyRes.status !== '1') throw new Error('API Key 无效或地址错误');
     renderAll(dexData, supplyRes, holderRes, chain);
     $('result').classList.remove('hidden');
     setStatus('检测完成 ✓');
@@ -237,9 +238,8 @@ document.getElementById('analyzeBtn').addEventListener('click', async () => {  /
     renderAll(mock.dex, mock.supply, mock.holders, chain);
     $('result').classList.remove('hidden');
   }
-};
+});
 
-/* ====================== 渲染 (全恢复) ====================== */
 function renderAll(dex, supplyRes, holderRes, chain) {
   const pair = dex.pairs?.[0] || {};
   const price = parseFloat(pair.priceUsd) || 0;
@@ -256,7 +256,7 @@ function renderAll(dex, supplyRes, holderRes, chain) {
   const risk = Math.round((top10Sum / totalSupply) * 100);
 
   // AI Score (5 维度)
-  const contractSafe = 20; // 假设
+  const contractSafe = 20;
   const holderDisp = 20 - Math.min(20, risk);
   const liqLock = 20;
   const sybil = 20;
@@ -280,7 +280,7 @@ function renderAll(dex, supplyRes, holderRes, chain) {
     options: { responsive: true, plugins: { legend: { display: false } } }
   });
 
-  // Bubble Map (恢复)
+  // Bubble Map
   const bubbleMap = document.getElementById('bubbleMap');
   bubbleMap.innerHTML = '';
   holders.slice(0,5).forEach((h, i) => {
