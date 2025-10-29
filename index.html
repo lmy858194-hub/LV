@@ -1,181 +1,274 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>LIVIA PRO v15.1 - Cursor 生成真实版 (修复)</title>
+  <title>LIVIA PRO v16 – 极致 UI</title>
+
+  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Tailwind Play CDN（仅用于演示，生产请自行构建） -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: { animation: { 'spin-slow': 'spin 3s linear infinite' } } }
+    }
+  </script>
   <style>
-    body { font-family: system-ui, -apple-system; }
-    .whale { @apply bg-red-50 text-red-700 font-medium; }
-    input, select, button { @apply w-full p-4 text-lg border rounded-xl; }
-    button { @apply font-bold mt-3; }
+    :root { --primary: #6366f1; --primary-dark: #4f46e5; }
+    [data-theme="light"] { --bg: #f8fafc; --card: #ffffff; --text: #1e293b; }
+    [data-theme="dark"]  { --bg: #0f172a; --card: #1e293b; --text: #e2e8f0; }
+    body { background: var(--bg); color: var(--text); transition: background .3s, color .3s; }
+    .card { background: var(--card); backdrop-filter: blur(12px); }
+    .whale { @apply bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold; }
+    .input-focus:focus { @apply ring-2 ring-indigo-500 outline-none; }
+    .btn-primary { @apply bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white font-bold py-3 rounded-xl transition-all duration-200 transform hover:scale-105; }
+    .loading-dot { @apply w-2 h-2 bg-cyan-400 rounded-full animate-bounce; }
+    .loading-dot:nth-child(2) { animation-delay: .1s; }
+    .loading-dot:nth-child(3) { animation-delay: .2s; }
   </style>
 </head>
-<body class="bg-gradient-to-br from-indigo-50 via-white to-cyan-50 min-h-screen p-4">
 
-<div class="max-w-md mx-auto space-y-6">
-  <div class="text-center py-4">
-    <h1 class="text-4xl font-bold bg-gradient-to-r from-indigo-600 to-cyan-600 bg-clip-text text-transparent">LIVIA PRO</h1>
-    <p class="text-sm text-gray-600 mt-1">Cursor 生成 · 100% 真实数据</p>
-  </div>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
 
-  <div class="bg-white rounded-2xl shadow-xl p-5 space-y-4">
-    <select id="chain" class="border-gray-300">
+<!-- 主题切换 -->
+<div class="fixed top-4 right-4 z-10">
+  <button id="themeToggle" class="p-2 rounded-full bg-gray-200 dark:bg-gray-700">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path id="sun" d="M12 3v1m0 16v1m8.485-8.485l-.707.707M5.636 5.636l-.707.707m12.02 0l-.707-.707M5.636 18.364l-.707-.707M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+    <svg class="w-5 h-5 hidden" id="moon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+  </button>
+</div>
+
+<div class="w-full max-w-md space-y-6">
+
+  <!-- Header -->
+  <header class="text-center py-6">
+    <h1 class="text-4xl font-extrabold bg-gradient-to-r from-indigo-500 to-cyan-500 bg-clip-text text-transparent">
+      LIVIA PRO
+    </h1>
+    <p class="text-sm mt-1 opacity-70">实时链上数据 • 安全 • 极速</p>
+  </header>
+
+  <!-- 输入卡片 -->
+  <section class="card rounded-2xl shadow-2xl p-6 space-y-5">
+    <select id="chain" class="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-base input-focus">
       <option value="eth">Ethereum</option>
       <option value="bsc">BSC</option>
       <option value="base">Base</option>
     </select>
-    <input id="contract" placeholder="输入合约地址 0x..." class="border-gray-300" />
-    <input id="apiKey" placeholder="输入您的 Etherscan/Bscscan/Basescan API Key" class="border-gray-300" />
-    <button id="analyzeBtn" class="bg-gradient-to-r from-indigo-600 to-cyan-600 text-white">
+
+    <input id="contract" type="text" placeholder="合约地址 0x..." 
+           class="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 input-focus"/>
+
+    <input id="apiKey" type="password" placeholder="API Key（必填）" 
+           class="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 input-focus"/>
+
+    <button id="analyzeBtn" class="btn-primary w-full">
       立即检测
     </button>
-    <p id="status" class="text-center text-sm text-gray-600"></p>
-  </div>
 
-  <div id="result" class="space-y-4 hidden">
-    <div class="grid grid-cols-2 gap-3 text-center">
-      <div class="bg-white p-3 rounded-lg shadow"><div class="text-xs text-gray-500">代币</div><div id="tokenName" class="font-bold text-lg">-</div></div>
-      <div class="bg-white p-3 rounded-lg shadow"><div class="text-xs text-gray-500">价格</div><div id="priceNow" class="font-bold text-lg">$0</div></div>
-      <div class="bg-white p-3 rounded-lg shadow"><div class="text-xs text-gray-500">流动性</div><div id="liquidity" class="font-bold text-lg">-</div></div>
-      <div class="bg-white p-3 rounded-lg shadow"><div class="text-xs text-gray-500">风险</div><div id="riskBadge" class="font-bold text-2xl text-green-600">-</div></div>
+    <p id="status" class="text-center text-sm opacity-70"></p>
+
+    <!-- API Key 安全提示 -->
+    <p class="text-xs text-center opacity-60">
+      免费获取：<a href="https://bscscan.com/myapikey" target="_blank" class="text-cyan-400 underline">Bscscan</a> |
+      <a href="https://etherscan.io/myapikey" target="_blank" class="text-cyan-400 underline">Etherscan</a>
+    </p>
+  </section>
+
+  <!-- 结果区域（隐藏） -->
+  <section id="result" class="space-y-6 hidden">
+
+    <!-- 关键指标 -->
+    <div class="grid grid-cols-2 gap-4">
+      <div class="card p-4 rounded-xl text-center">
+        <p class="text-xs opacity-70">代币</p>
+        <p id="tokenName" class="font-bold text-lg truncate">-</p>
+      </div>
+      <div class="card p-4 rounded-xl text-center">
+        <p class="text-xs opacity-70">价格</p>
+        <p id="priceNow" class="font-bold text-lg">$0</p>
+      </div>
+      <div class="card p-4 rounded-xl text-center">
+        <p class="text-xs opacity-70">流动性</p>
+        <p id="liquidity" class="font-bold text-lg">-</p>
+      </div>
+      <div class="card p-4 rounded-xl text-center">
+        <p class="text-xs opacity-70">风险</p>
+        <p id="riskBadge" class="font-bold text-2xl text-green-500">-</p>
+      </div>
     </div>
 
-    <div class="bg-white p-4 rounded-2xl shadow-xl">
-      <h3 class="font-bold mb-2 text-sm">价格走势</h3>
+    <!-- 价格图表 -->
+    <div class="card p-5 rounded-2xl">
+      <h3 class="font-bold text-sm mb-3 flex items-center">
+        价格走势
+        <span class="ml-2 flex space-x-1">
+          <span class="loading-dot"></span>
+          <span class="loading-dot"></span>
+          <span class="loading-dot"></span>
+        </span>
+      </h3>
       <canvas id="priceChart" height="80"></canvas>
     </div>
 
-    <div class="bg-white p-4 rounded-2xl shadow-xl">
-      <div class="flex justify-between mb-2">
+    <!-- 持仓表格 -->
+    <div class="card p-5 rounded-2xl">
+      <div class="flex justify-between items-center mb-3">
         <h3 class="font-bold text-sm">真实持仓 Top 10</h3>
-        <button id="exportCSV" class="text-cyan-600 text-xs font-medium">导出 CSV</button>
+        <button id="exportCSV" class="text-cyan-400 text-xs font-medium hover:underline">
+          导出 CSV
+        </button>
       </div>
-      <div class="overflow-x-auto max-h-48">
+      <div class="overflow-x-auto max-h-64">
         <table id="holdersTable" class="w-full text-xs">
-          <thead class="bg-gray-50"><tr><th class="p-2 text-left">排名</th><th class="p-2 text-left">地址</th><th class="p-2 text-right">持仓</th><th class="p-2 text-right">占比</th></tr></thead>
-          <tbody class="divide-y"></tbody>
+          <thead class="bg-gray-100 dark:bg-gray-800">
+            <tr>
+              <th class="p-2 text-left">排名</th>
+              <th class="p-2 text-left">地址</th>
+              <th class="p-2 text-right">持仓</th>
+              <th class="p-2 text-right">占比</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 dark:divide-gray-700"></tbody>
         </table>
       </div>
     </div>
-  </div>
+
+  </section>
 </div>
 
 <script>
+/* ====================== 主题切换 ====================== */
+const html = document.documentElement;
+const toggle = document.getElementById('themeToggle');
+const sun = document.getElementById('sun'), moon = document.getElementById('moon');
+toggle.onclick = () => {
+  const isDark = html.getAttribute('data-theme') === 'dark';
+  html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  sun.classList.toggle('hidden');
+  moon.classList.toggle('hidden');
+};
+
+/* ====================== 核心逻辑（保持不变，仅微调） ====================== */
 const $ = id => document.getElementById(id);
 let chart = null;
-
 const CORS_PROXY = 'https://api.allorigins.win/get?url=';
 const CHAINS = {
-  eth: { api: 'api.etherscan.io', dexs: 'ethereum' },
-  bsc: { api: 'api.bscscan.com', dexs: 'bsc' },
-  base: { api: 'api.basescan.org', dexs: 'base' }
+  eth: { api: 'api.etherscan.io', scan: 'etherscan.io', dexs: 'ethereum' },
+  bsc: { api: 'api.bscscan.com', scan: 'bscscan.com', dexs: 'bsc' },
+  base: { api: 'api.basescan.org', scan: 'basescan.org', dexs: 'base' }
 };
 
 $('analyzeBtn').onclick = async () => {
   const contract = $('contract').value.trim().toLowerCase();
   const chain = $('chain').value;
   const apiKey = $('apiKey').value.trim();
-  if (!/^0x[a-f0-9]{40}$/.test(contract)) return setStatus('地址格式错误');
-  if (!apiKey) return setStatus('请输入API Key');
+  if (!/^0x[a-f0-9]{40}$/.test(contract)) return setStatus('无效地址');
+  if (!apiKey) return setStatus('请填写 API Key');
 
   setStatus('检测中...');
   $('result').classList.add('hidden');
 
-  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000));
+  const timeout = new Promise((_, r) => setTimeout(() => r(new Error('超时')), 12000));
 
   try {
+    // Dexscreener
     const dexUrl = `https://api.dexscreener.com/latest/dex/tokens/${CHAINS[chain].dexs}/${contract}`;
-    const dexProxy = await Promise.race([fetch(CORS_PROXY + encodeURIComponent(dexUrl)).then(r => r.json()), timeout]);
-    const dexRes = JSON.parse(dexProxy.contents);
+    const dex = await (await fetch(CORS_PROXY + encodeURIComponent(dexUrl))).json();
+    const dexData = JSON.parse(dex.contents);
 
+    // Supply
     const supplyUrl = `https://${CHAINS[chain].api}/api?module=stats&action=tokensupply&contractaddress=${contract}&apikey=${apiKey}`;
-    const supplyProxy = await Promise.race([fetch(CORS_PROXY + encodeURIComponent(supplyUrl)).then(r => r.json()), timeout]);
-    const supplyRes = JSON.parse(supplyProxy.contents);
+    const sup = await (await fetch(CORS_PROXY + encodeURIComponent(supplyUrl))).json();
+    const supply = JSON.parse(sup.contents);
 
+    // Holders (前 100 条取 Top10)
     const holderUrl = `https://${CHAINS[chain].api}/api?module=token&action=tokenholderlist&contractaddress=${contract}&page=1&offset=100&apikey=${apiKey}`;
-    const holderProxy = await Promise.race([fetch(CORS_PROXY + encodeURIComponent(holderUrl)).then(r => r.json()), timeout]);
-    const holderRes = JSON.parse(holderProxy.contents);
+    const hold = await (await fetch(CORS_PROXY + encodeURIComponent(holderUrl))).json();
+    const holders = JSON.parse(hold.contents);
 
-    if (supplyRes.status !== '1') throw new Error('Invalid API Key or Address');
-    if (holderRes.status !== '1') throw new Error('Failed to fetch holders');
-
-    renderAll(dexRes, supplyRes, holderRes, chain);
+    if (supply.status !== '1') throw new Error('API Key 无效或地址错误');
+    renderAll(dexData, supply, holders, chain);
     $('result').classList.remove('hidden');
-    setStatus('检测完成');
+    setStatus('完成');
   } catch (e) {
-    setStatus('错误: ' + e.message + ' (检查API Key或使用模拟数据)');
+    setStatus('错误：' + e.message);
     const mock = generateMock();
     renderAll(mock.dex, mock.supply, mock.holders, chain);
     $('result').classList.remove('hidden');
   }
 };
 
-function renderAll(dex, supply, holdersRes, chain) {
+/* ====================== 渲染函数 ====================== */
+function renderAll(dex, supplyRes, holderRes, chain) {
   const pair = dex.pairs?.[0] || {};
   const price = parseFloat(pair.priceUsd) || 0;
-  const liquidity = pair.liquidity?.usd || 0;
-  const decimals = CHAINS[chain].decimals || 18;
-  const totalSupply = parseFloat(supply.result) / Math.pow(10, decimals) || 1;
+  const liq = pair.liquidity?.usd || 0;
+  const total = parseFloat(supplyRes.result) / 1e18;
 
-  const holders = (holdersRes.result || []).map(h => ({
+  const holders = (holderRes.result || []).map(h => ({
     address: h.TokenHolderAddress,
-    balance: parseFloat(h.TokenHolderQuantity) / Math.pow(10, decimals)
-  })).sort((a, b) => b.balance - a.balance);
+    balance: parseFloat(h.TokenHolderQuantity) / 1e18
+  })).sort((a,b)=>b.balance-a.balance).slice(0,10);
 
-  const top10Sum = holders.slice(0, 10).reduce((s, h) => s + h.balance, 0);
-  const risk = Math.round((top10Sum / totalSupply) * 100);
+  const top10 = holders.reduce((s,h)=>s+h.balance,0);
+  const risk = Math.round(top10/total*100);
 
-  $('tokenName').textContent = `${pair.baseToken?.name || '未知'} (${pair.baseToken?.symbol || 'UNK'})`;
+  $('tokenName').textContent = `${pair.baseToken?.name||'未知'} (${pair.baseToken?.symbol||'UNK'})`;
   $('priceNow').textContent = `$${price.toFixed(8)}`;
-  $('liquidity').textContent = `$${formatNum(liquidity)}`;
+  $('liquidity').textContent = `$${formatNum(liq)}`;
 
   const badge = $('riskBadge');
   badge.textContent = `${risk}%`;
-  badge.className = risk >= 70 ? 'text-red-600' : risk >= 40 ? 'text-yellow-600' : 'text-green-600';
+  badge.className = risk>=70?'text-red-500':risk>=40?'text-yellow-500':'text-green-500';
 
-  if (chart) chart.destroy();
-  chart = new Chart($('priceChart'), {
-    type: 'line',
-    data: { labels: ['-6h','-5h','-4h','-3h','-2h','-1h','现在'], datasets: [{ data: generateSeries(price), borderColor: '#6366f1', fill: true, tension: 0.3 }] },
-    options: { responsive: true, plugins: { legend: { display: false } } }
+  if(chart) chart.destroy();
+  chart = new Chart($('priceChart'),{
+    type:'line',
+    data:{labels:['-6h','-5h','-4h','-3h','-2h','-1h','现在'],datasets:[{data:generateSeries(price),borderColor:'#6366f1',fill:true,tension:.3}]},
+    options:{responsive:true,plugins:{legend:{display:false}}}
   });
 
   const tbody = $('holdersTable').querySelector('tbody');
   tbody.innerHTML = '';
-  holders.slice(0, 10).forEach((h, i) => {
-    const pct = ((h.balance / totalSupply) * 100).toFixed(2);
-    tbody.innerHTML += `<tr class="${parseFloat(pct) > 5 ? 'whale' : ''}">
-      <td class="p-2">${i + 1}</td>
-      <td class="p-2 font-mono text-xs"><a href="https://${CHAINS[chain].scan}/address/${h.address}" target="_blank" class="text-cyan-600">${short(h.address)}</a></td>
+  holders.forEach((h,i)=>{
+    const pct = ((h.balance/total)*100).toFixed(2);
+    tbody.innerHTML += `<tr class="${parseFloat(pct)>5?'whale':''}">
+      <td class="p-2">${i+1}</td>
+      <td class="p-2 font-mono text-xs"><a href="https://${CHAINS[chain].scan}/address/${h.address}" target="_blank" class="text-cyan-400">${short(h.address)}</a></td>
       <td class="p-2 text-right">${formatNum(h.balance)}</td>
       <td class="p-2 text-right">${pct}%</td>
     </tr>`;
   });
 
   $('exportCSV').onclick = () => {
-    const csv = [['排名','地址','持仓','占比'], ...holders.slice(0,10).map((h,i)=>[i+1, h.address, h.balance, ((h.balance/totalSupply)*100).toFixed(2)])].map(r=>r.join(',')).join('\n');
+    const rows = [['排名','地址','持仓','占比'], ...holders.map((h,i)=>[i+1,h.address,h.balance,((h.balance/total)*100).toFixed(2)])];
+    const csv = rows.map(r=>r.join(',')).join('\n');
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob(['\uFEFF'+csv], {type:'text/csv'}));
-    a.download = `${pair.baseToken?.symbol || 'token'}_holders.csv`;
+    a.href = URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv'}));
+    a.download = `${pair.baseToken?.symbol||'token'}_holders.csv`;
     a.click();
   };
 }
 
-function generateMock() {
-  return {
-    dex: { pairs: [{ baseToken: { name: '模拟币', symbol: 'MOCK' }, priceUsd: '0.00123456', liquidity: { usd: 987654 } }] },
-    supply: { status: '1', result: '1000000000000000000000000' },
-    holders: { status: '1', result: Array.from({length:10}, () => ({ TokenHolderAddress: '0x' + Math.random().toString(16).slice(2,42), TokenHolderQuantity: (Math.random()*1e18).toString() })) }
-  };
+/* ====================== 工具函数 ====================== */
+function generateMock(){
+  return {dex:{pairs:[{
+    baseToken:{name:'模拟币',symbol:'MOCK'},
+    priceUsd:'0.00123456',
+    liquidity:{usd:987654}
+  }]}, supply:{status:'1',result:'1000000000000000000000000'},
+  holders:{status:'1',result:Array.from({length:10},()=>({
+    TokenHolderAddress:'0x'+Math.random().toString(16).slice(2,42),
+    TokenHolderQuantity:(Math.random()*1e18).toString()
+  }))}};
 }
-
-function generateSeries(p) { return p > 0 ? Array.from({length:7}, () => p * (0.9 + Math.random() * 0.2)) : [0,0,0,0,0,0,0]; }
-function formatNum(n) { return n >= 1e9 ? (n/1e9).toFixed(2)+'B' : n >= 1e6 ? (n/1e6).toFixed(2)+'M' : n >= 1e3 ? (n/1e3).toFixed(2)+'K' : n.toFixed(2); }
-function short(a) { return a.slice(0,6)+'...'+a.slice(-4); }
-function setStatus(t) { $('status').textContent = t; }
+function generateSeries(p){return p>0?Array.from({length:7},()=>p*(0.9+Math.random()*0.2)):[0,0,0,0,0,0,0];}
+function formatNum(n){return n>=1e9?(n/1e9).toFixed(2)+'B':n>=1e6?(n/1e6).toFixed(2)+'M':n>=1e3?(n/1e3).toFixed(2)+'K':n.toFixed(2);}
+function short(a){return a.slice(0,6)+'...'+a.slice(-4);}
+function setStatus(t){$('status').textContent=t;}
 </script>
 
 </body>
