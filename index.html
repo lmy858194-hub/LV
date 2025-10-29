@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>LIVIA PRO v15.0 - Cursor 生成真实版</title>
+  <title>LIVIA PRO v15.1 - Cursor 生成真实版 (修复)</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -28,6 +28,7 @@
       <option value="base">Base</option>
     </select>
     <input id="contract" placeholder="输入合约地址 0x..." class="border-gray-300" />
+    <input id="apiKey" placeholder="输入您的 Etherscan/Bscscan/Basescan API Key" class="border-gray-300" />
     <button id="analyzeBtn" class="bg-gradient-to-r from-indigo-600 to-cyan-600 text-white">
       立即检测
     </button>
@@ -66,7 +67,6 @@
 const $ = id => document.getElementById(id);
 let chart = null;
 
-const API_KEY = '8V6ETES6VW8E1WECBBDTGH9WGWAXXSMWQY';
 const CORS_PROXY = 'https://api.allorigins.win/get?url=';
 const CHAINS = {
   eth: { api: 'api.etherscan.io', dexs: 'ethereum' },
@@ -77,44 +77,56 @@ const CHAINS = {
 $('analyzeBtn').onclick = async () => {
   const contract = $('contract').value.trim().toLowerCase();
   const chain = $('chain').value;
+  const apiKey = $('apiKey').value.trim();
   if (!/^0x[a-f0-9]{40}$/.test(contract)) return setStatus('地址格式错误');
+  if (!apiKey) return setStatus('请输入API Key');
 
   setStatus('检测中...');
   $('result').classList.add('hidden');
 
-  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2500));
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000));
 
   try {
-    const dexRes = await Promise.race([fetch(`https://api.dexscreener.com/latest/dex/tokens/${CHAINS[chain].dexs}/${contract}`).then(r => r.json()), timeout]);
+    const dexUrl = `https://api.dexscreener.com/latest/dex/tokens/${CHAINS[chain].dexs}/${contract}`;
+    const dexProxy = await Promise.race([fetch(CORS_PROXY + encodeURIComponent(dexUrl)).then(r => r.json()), timeout]);
+    const dexRes = JSON.parse(dexProxy.contents);
 
-    const holderUrl = `https://${CHAINS[chain].api}/api?module=token&action=tokenholderlist&contractaddress=${contract}&page=1&offset=10&apikey=${API_KEY}`;
+    const supplyUrl = `https://${CHAINS[chain].api}/api?module=stats&action=tokensupply&contractaddress=${contract}&apikey=${apiKey}`;
+    const supplyProxy = await Promise.race([fetch(CORS_PROXY + encodeURIComponent(supplyUrl)).then(r => r.json()), timeout]);
+    const supplyRes = JSON.parse(supplyProxy.contents);
+
+    const holderUrl = `https://${CHAINS[chain].api}/api?module=token&action=tokenholderlist&contractaddress=${contract}&page=1&offset=100&apikey=${apiKey}`;
     const holderProxy = await Promise.race([fetch(CORS_PROXY + encodeURIComponent(holderUrl)).then(r => r.json()), timeout]);
     const holderRes = JSON.parse(holderProxy.contents);
 
-    renderAll(dexRes, holderRes, chain);
+    if (supplyRes.status !== '1') throw new Error('Invalid API Key or Address');
+    if (holderRes.status !== '1') throw new Error('Failed to fetch holders');
+
+    renderAll(dexRes, supplyRes, holderRes, chain);
     $('result').classList.remove('hidden');
     setStatus('检测完成');
   } catch (e) {
+    setStatus('错误: ' + e.message + ' (检查API Key或使用模拟数据)');
     const mock = generateMock();
-    renderAll(mock.dex, mock.holders, chain);
+    renderAll(mock.dex, mock.supply, mock.holders, chain);
     $('result').classList.remove('hidden');
-    setStatus('使用模拟数据');
   }
 };
 
-function renderAll(dex, holdersRes, chain) {
+function renderAll(dex, supply, holdersRes, chain) {
   const pair = dex.pairs?.[0] || {};
   const price = parseFloat(pair.priceUsd) || 0;
   const liquidity = pair.liquidity?.usd || 0;
+  const decimals = CHAINS[chain].decimals || 18;
+  const totalSupply = parseFloat(supply.result) / Math.pow(10, decimals) || 1;
 
   const holders = (holdersRes.result || []).map(h => ({
     address: h.TokenHolderAddress,
-    balance: parseFloat(h.TokenHolderQuantity) / 1e18
+    balance: parseFloat(h.TokenHolderQuantity) / Math.pow(10, decimals)
   })).sort((a, b) => b.balance - a.balance);
 
-  const total = holders.reduce((s, h) => s + h.balance, 0) || 1;
-  const top5 = holders.slice(0, 5).reduce((s, h) => s + h.balance, 0);
-  const risk = Math.round((top5 / total) * 100);
+  const top10Sum = holders.slice(0, 10).reduce((s, h) => s + h.balance, 0);
+  const risk = Math.round((top10Sum / totalSupply) * 100);
 
   $('tokenName').textContent = `${pair.baseToken?.name || '未知'} (${pair.baseToken?.symbol || 'UNK'})`;
   $('priceNow').textContent = `$${price.toFixed(8)}`;
@@ -133,18 +145,18 @@ function renderAll(dex, holdersRes, chain) {
 
   const tbody = $('holdersTable').querySelector('tbody');
   tbody.innerHTML = '';
-  holders.forEach((h, i) => {
-    const pct = ((h.balance / total) * 100).toFixed(2);
-    tbody.innerHTML += `<tr class="${h.balance / total > 0.05 ? 'whale' : ''}">
+  holders.slice(0, 10).forEach((h, i) => {
+    const pct = ((h.balance / totalSupply) * 100).toFixed(2);
+    tbody.innerHTML += `<tr class="${parseFloat(pct) > 5 ? 'whale' : ''}">
       <td class="p-2">${i + 1}</td>
-      <td class="p-2 font-mono text-xs">${short(h.address)}</td>
+      <td class="p-2 font-mono text-xs"><a href="https://${CHAINS[chain].scan}/address/${h.address}" target="_blank" class="text-cyan-600">${short(h.address)}</a></td>
       <td class="p-2 text-right">${formatNum(h.balance)}</td>
       <td class="p-2 text-right">${pct}%</td>
     </tr>`;
   });
 
   $('exportCSV').onclick = () => {
-    const csv = [['排名','地址','余额','占比'], ...holders.map((h,i)=>[i+1, h.address, h.balance, ((h.balance/total)*100).toFixed(2)])].map(r=>r.join(',')).join('\n');
+    const csv = [['排名','地址','持仓','占比'], ...holders.slice(0,10).map((h,i)=>[i+1, h.address, h.balance, ((h.balance/totalSupply)*100).toFixed(2)])].map(r=>r.join(',')).join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob(['\uFEFF'+csv], {type:'text/csv'}));
     a.download = `${pair.baseToken?.symbol || 'token'}_holders.csv`;
@@ -155,13 +167,14 @@ function renderAll(dex, holdersRes, chain) {
 function generateMock() {
   return {
     dex: { pairs: [{ baseToken: { name: '模拟币', symbol: 'MOCK' }, priceUsd: '0.00123456', liquidity: { usd: 987654 } }] },
-    holdersRes: { result: Array.from({length:10}, () => ({ TokenHolderAddress: '0x' + Math.random().toString(16).slice(2,42), TokenHolderQuantity: Math.random()*1e18 })) }
+    supply: { status: '1', result: '1000000000000000000000000' },
+    holders: { status: '1', result: Array.from({length:10}, () => ({ TokenHolderAddress: '0x' + Math.random().toString(16).slice(2,42), TokenHolderQuantity: (Math.random()*1e18).toString() })) }
   };
 }
 
 function generateSeries(p) { return p > 0 ? Array.from({length:7}, () => p * (0.9 + Math.random() * 0.2)) : [0,0,0,0,0,0,0]; }
 function formatNum(n) { return n >= 1e9 ? (n/1e9).toFixed(2)+'B' : n >= 1e6 ? (n/1e6).toFixed(2)+'M' : n >= 1e3 ? (n/1e3).toFixed(2)+'K' : n.toFixed(2); }
-function short(a) { return a.slice(0,8)+'...'+a.slice(-6); }
+function short(a) { return a.slice(0,6)+'...'+a.slice(-4); }
 function setStatus(t) { $('status').textContent = t; }
 </script>
 
