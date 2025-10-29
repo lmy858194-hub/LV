@@ -1,401 +1,210 @@
 <!doctype html>
 <html lang="zh">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>LIVIA V5 — 实时链上版（Etherscan V2 + DexScreener）</title>
-<meta name="description" content="LIVIA V5 — 实时链上数据（BSC/ETH/Solana）示例">
-<style>
-  :root{--bg:#fff;--text:#111;--muted:#666;--accent:#0aa;--danger:#d9534f;--safe:#28a745}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,Arial,Helvetica,sans-serif;padding:12px}
-  .wrap{max-width:1100px;margin:0 auto}
-  .row{display:flex;gap:12px;flex-wrap:wrap}
-  .col{flex:1;min-width:260px}
-  .card{background:#fff;border:1px solid #e6e6e6;border-radius:10px;padding:12px;box-shadow:0 6px 18px rgba(0,0,0,0.04)}
-  h1{font-size:18px;margin:0 0 8px 0}
-  label{font-size:13px;color:var(--muted)}
-  input,select,button{width:100%;padding:8px;margin-top:6px;border-radius:8px;border:1px solid #ddd;font-size:14px}
-  button{background:linear-gradient(90deg,var(--accent),#66d9ff);color:#012;cursor:pointer;border:0}
-  .small{font-size:13px;color:var(--muted)}
-  table{width:100%;border-collapse:collapse;margin-top:8px}
-  th,td{padding:8px;border-bottom:1px solid #eee;text-align:center;font-size:13px}
-  .tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#f3f3f3;margin-left:8px;font-size:12px}
-  .charts{display:flex;flex-direction:column;gap:8px}
-  .chart{background:#fff;padding:8px;border-radius:8px;border:1px solid #eee}
-  .muted{color:var(--muted)}
-  @media(max-width:900px){ .row{flex-direction:column} }
-</style>
+  <meta charset="utf-8">
+  <title>LIVIA PRO — 专业链上检测</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tanstack/react-table@8"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .whale { @apply bg-red-50 text-red-700; }
+    .loading { @apply animate-pulse; }
+  </style>
 </head>
-<body>
-<div class="wrap">
-  <h1>LIVIA V5 — 实时链上专业版 <span class="small muted">（Etherscan V2 + DexScreener）</span></h1>
+<body class="bg-gray-50 text-gray-800">
+<div id="root"></div>
 
-  <div class="card" style="margin-bottom:12px">
-    <div style="display:flex;gap:12px;flex-wrap:wrap">
-      <div style="flex:1;min-width:220px">
-        <label>链</label>
-        <select id="chain">
-          <option value="BSC">BSC</option>
-          <option value="ETH">ETH</option>
-        </select>
-      </div>
-      <div style="flex:2;min-width:260px">
-        <label>合约地址</label>
-        <input id="contract" placeholder="0x..." />
-      </div>
-      <div style="flex:1;min-width:220px">
-        <label>API Key（Etherscan V2 / BscScan，默认已填）</label>
-        <input id="apikey" type="password" />
-      </div>
-      <div style="width:140px;align-self:end">
-        <button id="loadBtn">加载并分析</button>
-      </div>
-    </div>
-    <div id="status" class="small muted" style="margin-top:8px">准备就绪</div>
-  </div>
+<script type="module">
+import { createRoot } from 'react-dom/client';
+import { useState, useEffect, useMemo } from 'react';
+import { useTable, usePagination, useSortBy } from '@tanstack/react-table';
+import { format } from 'date-fns';
 
-  <div class="row">
-    <div class="col">
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div><strong>概览</strong><div class="small muted">合约基础信息</div></div>
-          <div id="riskBadge" class="tag">—</div>
-        </div>
-        <div id="overview" style="margin-top:8px" class="small">
-          <div>合约：<span id="ovAddr">—</span></div>
-          <div>总量：<span id="ovSupply">—</span></div>
-          <div>持有人数（公开）：<span id="ovHolders">—</span></div>
-        </div>
-      </div>
+// ==================== CONFIG ====================
+const WORKER_URL = 'https://your-worker.your-subdomain.workers.dev'; // 部署后替换
+const CHAINS = {
+  ETH: { id: 1,  name: 'Ethereum',   covalent: 'eth-mainnet',   dexscreener: 'ethereum' },
+  BSC: { id: 56, name: 'BSC',        covalent: 'bsc-mainnet',   dexscreener: 'bsc' },
+  POLYGON: { id: 137, name: 'Polygon', covalent: 'matic-mainnet', dexscreener: 'polygon' }
+};
 
-      <div class="card" style="margin-top:12px">
-        <strong>持仓 Top (演示/实时混合)</strong>
-        <div id="holdersWrap" class="small muted" style="margin-top:8px">请先加载</div>
-        <div style="display:flex;gap:8px;margin-top:8px"><button id="exportCSV">导出 CSV</button></div>
-      </div>
+// ==================== 主组件 ====================
+function App() {
+  const [chain, setChain] = useState('ETH');
+  const [contract, setContract] = useState('');
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-      <div class="card" style="margin-top:12px">
-        <strong>LP 流动性检测</strong>
-        <div id="lpWrap" class="small muted" style="margin-top:8px">未检测</div>
-      </div>
-    </div>
+  // 自动刷新
+  useEffect(() => {
+    if (!contract) return;
+    const id = setInterval(fetchAll, 12_000);
+    fetchAll();
+    return () => clearInterval(id);
+  }, [contract, chain]);
 
-    <div class="col" style="min-width:420px">
-      <div class="card">
-        <strong>价格 & 成交量（来自 DexScreener）</strong>
-        <div class="charts" style="margin-top:8px">
-          <div class="chart"><canvas id="priceChart" height="180"></canvas></div>
-          <div style="display:flex;gap:8px;margin-top:6px">
-            <div style="flex:1" class="chart"><canvas id="pieChart" height="160"></canvas></div>
-            <div style="flex:1" class="chart"><canvas id="barChart" height="160"></canvas></div>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <button id="exportAll">导出全部图表</button>
-            <div class="small muted" style="align-self:center;margin-left:auto">自动刷新：<span id="autoInterval">15s</span></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="card" style="margin-top:12px">
-        <strong>最近交易（公开链上）</strong>
-        <div id="txWrap" class="small muted" style="margin-top:8px">未加载</div>
-      </div>
-    </div>
-
-  </div>
-</div>
-
-<script>
-/* ============= 配置 ============= */
-const DEFAULT_API_KEY = "8V6ETES6VW8E1WECBBDTGH9WGWAXXSMWQY"; // 你已提供的通用 Key（可改）
-const AUTO_REFRESH_MS = 15000; // 自动刷新间隔（毫秒）
-const MAX_HOLDERS_SHOW = 50;
-
-/* ============= 工具函数 ============= */
-const $ = id => document.getElementById(id);
-function shortAddr(a){ if(!a) return ''; return (a.length>12)?(a.slice(0,6)+'...'+a.slice(-4)):a; }
-function setStatus(text){ $('status').innerText = text; }
-
-/* ============= API helpers ============= */
-/* Etherscan/BscScan V2 token holder list (PRO/V2). docs: Etherscan tokens endpoints. */
-async function fetchTopHoldersEtherscan(chain, contract, apiKey){
-  // Etherscan V2 docs show /v2 endpoints for token holders; base differs for BSC/ETH (api base)
-  const apiBase = chain === 'BSC' ? 'https://api.bscscan.com' : 'https://api.etherscan.io';
-  // v2 token holder list endpoint format (Etherscan V2): /v2?module=token&action=tokenholderlist&contractaddress=...
-  // Note: endpoint availability depends on your plan/account.
-  const url = `${apiBase}/v2?module=token&action=tokenholderlist&contractaddress=${contract}&apikey=${apiKey}`;
-  const res = await fetch(url);
-  const j = await res.json();
-  // Example success: j.status === "1" && j.result is array
-  return j;
-}
-
-/* token transfers (older account module) - fallback to get recent txs */
-async function fetchTokenTransfers(chain, contract, apiKey){
-  const apiBase = chain === 'BSC' ? 'https://api.bscscan.com' : 'https://api.etherscan.io';
-  const url = `${apiBase}/api?module=account&action=tokentx&contractaddress=${contract}&page=1&offset=50&sort=desc&apikey=${apiKey}`;
-  const res = await fetch(url);
-  return res.json();
-}
-
-/* token info (name, symbol, totalSupply if available) */
-async function fetchTokenInfoEtherscan(chain, contract, apiKey){
-  const apiBase = chain === 'BSC' ? 'https://api.bscscan.com' : 'https://api.etherscan.io';
-  // V2 tokeninfo endpoint (docs mention tokeninfo)
-  const url = `${apiBase}/v2?module=token&action=tokeninfo&contractaddress=${contract}&apikey=${apiKey}`;
-  const res = await fetch(url);
-  return res.json();
-}
-
-/* DexScreener price endpoint (public) — works for many chains */
-async function fetchPriceDexScreener(chain, contract){
-  // Dexscreener uses chain slug prefixes; for BSC use 'bsc', for ethereum use 'ethereum'
-  const chainSlug = chain === 'BSC' ? 'bsc' : 'ethereum';
-  // token route: https://api.dexscreener.com/latest/dex/tokens/{chainSlug}/{contract}
-  const url = `https://api.dexscreener.com/latest/dex/tokens/${chainSlug}/${contract}`;
-  const res = await fetch(url);
-  return res.json();
-}
-
-/* ============= 渲染函数 ============= */
-let priceChart = null, pieChart = null, barChart = null;
-function renderCharts(priceSeries, volumeSeries, pieLabels, pieData, barLabels, barData){
-  // priceChart: line
-  const ctx = document.getElementById('priceChart').getContext('2d');
-  if(priceChart) priceChart.destroy();
-  priceChart = new Chart(ctx, {
-    type:'line',
-    data:{ labels: priceSeries.labels, datasets:[
-      {label:'价格', data: priceSeries.prices, borderColor:'#0aa', backgroundColor:'rgba(0,170,170,0.12)', fill:true, tension:0.2},
-      {label:'成交量', data: volumeSeries, borderColor:'#f90', backgroundColor:'rgba(255,153,0,0.12)', fill:true, yAxisID:'vol'}
-    ]},
-    options:{ responsive:true, interaction:{mode:'index',intersect:false}, scales:{ y:{ beginAtZero:false }, vol:{ position:'right', beginAtZero:true, grid:{display:false} } } }
-  });
-
-  // pie
-  const ctx2 = document.getElementById('pieChart').getContext('2d');
-  if(pieChart) pieChart.destroy();
-  pieChart = new Chart(ctx2, { type:'pie', data:{labels:pieLabels, datasets:[{data:pieData, backgroundColor:['#0aa','#66c','#ff9','#f66','#6f6','#a6f','#ccc']}]}, options:{responsive:true} });
-
-  // bar for top holders
-  const ctx3 = document.getElementById('barChart').getContext('2d');
-  if(barChart) barChart.destroy();
-  barChart = new Chart(ctx3, { type:'bar', data:{labels:barLabels, datasets:[{label:'持仓', data:barData, backgroundColor:'#0aa'}]}, options:{responsive:true} });
-}
-
-/* ============= 主流程 ============= */
-async function analyze(){
-  const contract = $('contract').value.trim();
-  const chain = $('chain').value;
-  const apikeyInput = $('apikey').value.trim();
-  const apiKey = apikeyInput || DEFAULT_API_KEY;
-  if(!contract){ setStatus('请填写合约地址'); return; }
-  if(!/^0x[a-fA-F0-9]{40}$/.test(contract)){ setStatus('合约地址格式看起来不对'); }
-  setStatus('开始加载...（注意：若接口受限会回退到演示/部分数据）');
-
-  // token info
-  try{
-    const info = await fetchTokenInfoEtherscan(chain, contract, apiKey);
-    // docs: tokeninfo V2 may return structure like {status: "1", result:{...}}
-    if(info && info.status==="1" && info.result){
-      $('ovAddr').innerText = `${shortAddr(contract)} • ${info.result.name||''} (${info.result.symbol||''})`;
-      $('ovSupply').innerText = info.result.totalSupply || '—';
-      if(info.result.holders) $('ovHolders').innerText = info.result.holders;
-    } else {
-      // fallback set minimal
-      $('ovAddr').innerText = shortAddr(contract);
-      $('ovSupply').innerText = '（未返回）';
-    }
-  }catch(e){
-    console.warn('token info failed', e);
-    $('ovAddr').innerText = shortAddr(contract);
-    $('ovSupply').innerText = '（请求失败）';
+  async function fetchAll() {
+    if (!/^0x[a-fA-F0-9]{40}$/i.test(contract)) return;
+    setLoading(true); setError('');
+    try {
+      const res = await fetch(`${WORKER_URL}/analyze?chain=${chain}&contract=${contract}`);
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      setData(json);
+    } catch (e) { setError(e.message); }
+    setLoading(false);
   }
 
-  // token holders (try Etherscan V2 tokenholderlist)
-  let holdersResult=null;
-  try{
-    const j = await fetchTopHoldersEtherscan(chain, contract, apiKey);
-    if(j && j.status==="1" && Array.isArray(j.result)){
-      holdersResult = j.result; // expect array of {address,balance}
-      setStatus('已获取持仓（Etherscan V2）');
-    } else {
-      console.warn('holders endpoint returned', j);
-      // fallback later
-    }
-  }catch(err){
-    console.warn('holders fetch error', err);
-  }
+  // ==================== 持仓表格 ====================
+  const holders = data?.holders || [];
+  const columns = useMemo(() => [
+    { Header: '排名', accessor: (_, i) => i + 1 },
+    { Header: '地址', accessor: 'address', Cell: ({value}) => <a href={`https://${chain==='BSC'?'bscscan':'etherscan'}.com/address/${value}`} target="_blank" className="text-blue-600 hover:underline">{value.slice(0,8)}...{value.slice(-6)}</a> },
+    { Header: '余额', accessor: 'balance', Cell: ({value}) => Number(value).toLocaleString() },
+    { Header: '占比', accessor: 'percent', Cell: ({value}) => value.toFixed(3)+'%' },
+    { Header: '鲸鱼', accessor: 'isWhale', Cell: ({value}) => value ? 'YES' : '' }
+  ], [chain]);
 
-  // token transfers (recent txs)
-  let transfers = [];
-  try{
-    const t = await fetchTokenTransfers(chain, contract, apiKey);
-    if(t && (t.status==="1" || t.result)){
-      const arr = t.result || [];
-      // Normalize: take last 10 txs and map
-      transfers = (arr.slice(0,50)).map(tx=>({
-        hash: tx.hash,
-        from: tx.from,
-        to: tx.to,
-        value: Number(tx.value)/Math.pow(10, CHAIN_CONFIG[chain].decimals || 18),
-        timeStamp: tx.timeStamp
-      })).slice(0,10);
-      setStatus(prev=>'已获取交易数据');
-    }
-  }catch(err){
-    console.warn('transfers fail', err);
-  }
+  const table = useTable(
+    { columns, data: holders, initialState: { pageSize: 20 } },
+    useSortBy, usePagination
+  );
 
-  // price from DexScreener (public)
-  let priceSeries = { labels:[], prices:[] }, volumeSeries=[];
-  try{
-    const ds = await fetch('https://api.dexscreener.com/latest/dex/search?q='+contract).then(r=>r.json());
-    // DexScreener search returns many matches; prefer chain match
-    let route=null;
-    if(ds && ds.pairs && ds.pairs.length>0){
-      route = ds.pairs.find(p => p.pair && p.chain && ((p.chain.toLowerCase().includes(chain.toLowerCase())) || (chain==='BSC' && p.chain.toLowerCase().includes('bsc'))));
-    }
-    if(!route && ds && ds.pairs && ds.pairs.length>0) route = ds.pairs[0];
-    if(route){
-      // route contains priceUsd and price chart data in route.priceChange?. We'll fetch token-specific latest route
-      // Dexscreener has 'latest/dex/pairs/{pairId}' endpoint but pair id may be available in route.url
-      // Simpler: call latest route by token pair slug returned - but for robust demo, use route.priceChange or route.priceUsd
-      // We'll construct a small synthetic series (demo) from route.priceUsd
-      const p = Number(route.priceUsd) || 0;
-      priceSeries.labels = ['T-6','T-5','T-4','T-3','T-2','T-1','T'];
-      priceSeries.prices = [p*0.9,p*0.95,p*0.92,p*1.02,p*0.98,p*1.05,p];
-      volumeSeries = [100,150,120,300,200,250,180];
-      setStatus('价格来自 DexScreener（近似）');
-    } else {
-      setStatus('DexScreener 未找到匹配对，使用模拟价格');
-      priceSeries.labels = ['T-6','T-5','T-4','T-3','T-2','T-1','T'];
-      priceSeries.prices = [10,12,9,14,13,15,12];
-      volumeSeries = [100,200,150,300,250,400,350];
-    }
-  }catch(e){
-    console.warn('dexscreener fail', e);
-    priceSeries.labels = ['T-6','T-5','T-4','T-3','T-2','T-1','T'];
-    priceSeries.prices = [10,12,9,14,13,15,12];
-    volumeSeries = [100,200,150,300,250,400,350];
-    setStatus('价格查询失败，使用演示数据');
-  }
-
-  // Prepare holders display: if holdersResult available use it, else show demo
-  let holdersToShow = [];
-  if(holdersResult && holdersResult.length>0){
-    // expect result entries like {address, tokenBalance} or {address,balance}
-    holdersToShow = holdersResult.slice(0, MAX_HOLDERS_SHOW).map(h=>{
-      return { address: h.address || h.holderAddress || h.HolderAddress || h.account || '', balance: Number(h.tokenBalance || h.balance || h.value || 0) };
+  // ==================== 图表 ====================
+  useEffect(() => {
+    if (!data?.chart) return;
+    const ctx = document.getElementById('priceChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: data.chart.labels,
+        datasets: [
+          { label: '价格 (USD)', data: data.chart.prices, borderColor: '#10b981', tension: 0.2, yAxisID: 'y' },
+          { label: '成交量', data: data.chart.volumes, borderColor: '#f59e0b', yAxisID: 'y1' }
+        ]
+      },
+      options: { responsive: true, scales: { y: { position: 'left' }, y1: { position: 'right', grid: { drawOnChartArea: false } } } }
     });
-  } else {
-    // fallback demo aggregated
-    holdersToShow = [
-      {address:'0xabc...123', balance:50000},
-      {address:'0xdef...456', balance:30000},
-      {address:'0xghi...789', balance:20000}
-    ];
-  }
+  }, [data?.chart]);
 
-  // compute top10 ratio & risk score (simple weighted)
-  const total = holdersToShow.reduce((s,h)=>s+h.balance, 0) || 1;
-  const top10sum = holdersToShow.slice(0,10).reduce((s,h)=>s+h.balance,0);
-  const top10ratio = (top10sum/total*100);
-  let riskScore = Math.min(100, Math.round(top10ratio)); // simple metric; you can expand
-  $('riskBadge').innerText = riskScore >= 60 ? '高风险' : (riskScore >= 30 ? '中风险' : '低风险');
-  $('riskBadge').style.background = riskScore >= 60 ? '#ffd6d6' : (riskScore >= 30 ? '#fff4d6' : '#e8fff0');
+  return (
+    <div className="max-w-7xl mx-auto p-4 space-y-6">
+      <h1 className="text-2xl font-bold flex items-center gap-2">
+        LIVIA PRO <span className="text-sm text-gray-500">实时链上检测</span>
+      </h1>
 
-  // render holders table
-  const holdersHtml = `<table><thead><tr><th>地址</th><th>持仓</th><th>占比</th><th>鲸鱼</th></tr></thead><tbody>${
-    holdersToShow.slice(0,MAX_HOLDERS_SHOW).map(h=>{
-      const pct = (h.balance/total*100).toFixed(4);
-      const isWhale = (h.balance/total) > 0.01;
-      return `<tr class="${isWhale?'whale':''}"><td><a href="https://${chain==='BSC'?'bscscan':'etherscan'}.com/address/${h.address}" target="_blank">${shortAddr(h.address)}</a></td><td>${Number(h.balance).toLocaleString()}</td><td>${pct}%</td><td>${isWhale?'Yes':''}</td></tr>`;
-    }).join('')
-  }</tbody></table>`;
-  $('holdersWrap').innerHTML = holdersHtml;
+      {/* 输入区 */}
+      <div className="bg-white p-4 rounded-lg shadow flex flex-wrap gap-3">
+        <select value={chain} onChange={e=>setChain(e.target.value)} className="px-3 py-2 border rounded">
+          {Object.entries(CHAINS).map(([k,v])=><option key={k} value={k}>{v.name}</option>)}
+        </select>
+        <input value={contract} onChange={e=>setContract(e.target.value)} placeholder="0x..." className="flex-1 min-w-[300px] px-3 py-2 border rounded"/>
+        <button onClick={fetchAll} disabled={loading} className="px-6 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded disabled:opacity-50">
+          {loading ? '加载中...' : '立即检测'}
+        </button>
+      </div>
 
-  // render txs
-  if(transfers && transfers.length){
-    const txHtml = `<table><thead><tr><th>hash</th><th>类型</th><th>数量</th></tr></thead><tbody>${
-      transfers.map(t=>`<tr ${t.value>1500?'style="color:'+ (t.value>0? 'var(--danger)':'') +'"':''}><td><a href="https://${chain==='BSC'?'bscscan':'etherscan'}.com/tx/${t.hash}" target="_blank">${shortAddr(t.hash)}</a></td><td>${t.from && t.from.toLowerCase()===contract.toLowerCase() ? 'SELL' : (t.to && t.to.toLowerCase()===contract.toLowerCase() ? 'BUY' : 'TR') }</td><td>${Number(t.value).toLocaleString()}</td></tr>`).join('')
-    }</tbody></table>`;
-    $('txWrap').innerHTML = txHtml;
-  } else {
-    $('txWrap').innerHTML = '<div class="small muted">无交易数据（或接口未返回）</div>';
-  }
+      {error && <div className="bg-red-50 text-red-700 p-3 rounded">{error}</div>}
 
-  // LP detection (best-effort): we'll try to find LP pairs via DexScreener route if available
-  try{
-    const ds = await fetch('https://api.dexscreener.com/latest/dex/search?q='+contract).then(r=>r.json());
-    let pairs = ds && ds.pairs ? ds.pairs.filter(p=>p.pair) : [];
-    if(pairs && pairs.length){
-      // take top few and present LP owners fraction is not directly available via DexScreener;
-      // we'll show available pair info and warn re LP lock detection needs extra indexers (Covalent/Bitquery).
-      const lpHtml = pairs.slice(0,3).map(p=>`<div><strong>${p.pair}</strong> • Dex: ${p.dexName || p.pair?.split('/')?.[1] || 'N/A'} • Price: ${p.priceUsd || '—'}</div>`).join('');
-      $('lpWrap').innerHTML = lpHtml + `<div class="small muted" style="margin-top:6px">注意：要精确检测 LP 锁仓，需要调用链上合约或第三方索引（Covalent/Bitquery）。</div>`;
-    } else {
-      $('lpWrap').innerHTML = '<div class="small muted">未找到 LP 信息（DexScreener 未命中）</div>';
-    }
-  }catch(e){
-    $('lpWrap').innerHTML = '<div class="small muted">LP 检测失败：' + e.message + '</div>';
-  }
+      {data && (
+        <>
+          {/* 概览卡片 */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card title="代币" value={`${data.info.name} (${data.info.symbol})`} />
+            <Card title="总供应" value={Number(data.info.totalSupply).toLocaleString()} />
+            <Card title="持有人" value={data.info.holders?.toLocaleString() || '—'} />
+            <Card title="风险评分" value={data.risk} badge={data.risk>=70?'高':data.risk>=40?'中':'低'} />
+          </div>
 
-  // render charts
-  const pieLabels = holdersToShow.slice(0,10).map(h=>shortAddr(h.address));
-  const pieVals = holdersToShow.slice(0,10).map(h=>h.balance);
-  const barLabels = holdersToShow.slice(0,10).map(h=>shortAddr(h.address));
-  const barVals = holdersToShow.slice(0,10).map(h=>h.balance);
+          {/* 价格图表 */}
+          <div className="bg-white p-4 rounded-lg shadow">
+            <h2 className="font-semibold mb-2">价格 & 成交量 (DexScreener)</h2>
+            <canvas id="priceChart" height="100"></canvas>
+          </div>
 
-  renderCharts(priceSeries, volumeSeries, pieLabels, pieVals, barLabels, barVals);
+          {/* 持仓榜 */}
+          <div className="bg-white p-4 rounded-lg shadow overflow-x-auto">
+            <div className="flex justify-between mb-2">
+              <h2 className="font-semibold">持仓 Top 100</h2>
+              <button onClick={()=>{
+                const csv = ['排名,地址,余额,占比'].concat(holders.map((h,i)=>`${i+1},${h.address},${h.balance},${h.percent}`)).join('\n');
+                download(csv, 'holders.csv', 'text/csv');
+              }} className="text-sm text-blue-600">导出 CSV</button>
+            </div>
+            <table {...table.getTableProps()} className="w-full text-sm">
+              <thead className="bg-gray-50">
+                {table.headerGroups.map(headerGroup => (
+                  <tr {...headerGroup.getHeaderGroupProps()}>
+                    {headerGroup.headers.map(column => (
+                      <th {...column.getHeaderProps(column.getSortByToggleProps())} className="px-3 py-2 text-left">
+                        {column.render('Header')}
+                        {column.isSorted ? (column.isSortedDesc ? ' ↓' : ' ↑') : ''}
+                      </th>
+                    ))}
+                  </tr>
+                ))}
+              </thead>
+              <tbody {...table.getTableBodyProps()}>
+                {table.page.map(row => {
+                  table.prepareRow(row);
+                  return (
+                    <tr {...row.getRowProps()} className={row.original.isWhale?'whale':''}>
+                      {row.cells.map(cell => <td {...cell.getCellProps()} className="px-3 py-1 border-t">{cell.render('Cell')}</td>)}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div className="flex justify-between mt-2 text-sm">
+              <button onClick={()=>table.previousPage()} disabled={!table.canPreviousPage} className="px-2 disabled:opacity-50">上一页</button>
+              <span>第 {table.state.pageIndex + 1} 页 / 共 {table.pageOptions.length}</span>
+              <button onClick={()=>table.nextPage()} disabled={!table.canNextPage} className="px-2 disabled:opacity-50">下一页</button>
+            </div>
+          </div>
 
-  setStatus('完成（注意：速率受限请勿过于频繁刷新）');
+          {/* LP 锁仓 */}
+          <div className="bg-white p-4 rounded-lg shadow">
+            <h2 className="font-semibold mb-2">LP 流动性检测</h2>
+            {data.lp?.length ? (
+              <div className="space-y-2">
+                {data.lp.map(p=><div key={p.pair} className="flex justify-between text-sm">
+                  <span>{p.dex} • {p.pair}</span>
+                  <span className={p.locked?'text-green-600':'text-red-600'}>
+                    {p.locked ? '已锁定' : '未锁定'} ({(p.percent*100).toFixed(1)}%)
+                  </span>
+                </div>)}
+              </div>
+            ) : <p className="text-gray-500">未检测到 LP</p>}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
-/* ============= 交互绑定 ============= */
-$('apikey').value = DEFAULT_API_KEY;
-$('loadBtn').addEventListener('click', analyze);
-$('exportCSV').addEventListener('click', ()=>{
-  const rows = [['address','balance']];
-  const table = document.querySelector('#holdersWrap table');
-  if(!table){ alert('无持仓数据'); return; }
-  Array.from(table.tBodies[0].rows).forEach(r=>{
-    rows.push([r.cells[0].innerText, r.cells[1].innerText]);
-  });
-  const csv = rows.map(r=>r.join(',')).join('\n');
-  const blob = new Blob([csv], {type:'text/csv'}); const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href=url; a.download='holders.csv'; a.click(); URL.revokeObjectURL(url);
-});
-$('exportAll').addEventListener('click', ()=>{
-  ['priceChart','pieChart','barChart'].forEach(id=>{
-    const c = document.getElementById(id);
-    if(!c) return;
-    const a = document.createElement('a'); a.href = c.toDataURL(); a.download = id + '.png'; a.click();
-  });
-});
-
-/* ============= 自动刷新 ============= */
-let autoTimer = setInterval(()=>{
-  const contractVal = $('contract').value.trim();
-  if(contractVal) { $('loadBtn').click(); }
-}, AUTO_REFRESH_MS);
-
-/* ============= 初始图表占位 ============= */
-function initPlaceholders(){
-  // create three canvases with those ids for export convenience
-  // priceChart, pieChart, barChart canvases already present in HTML
-  // fill with placeholder chart
-  const labels=['T-6','T-5','T-4','T-3','T-2','T-1','T'];
-  renderCharts({labels,prices:[10,12,9,14,13,15,12]}, [100,200,150,300,250,400,350], ['A','B','C'], [50,30,20], ['A','B','C'], [50,30,20]);
+// 小组件
+function Card({title, value, badge}) {
+  return (
+    <div className="bg-white p-4 rounded-lg shadow">
+      <div className="text-xs text-gray-500">{title}</div>
+      <div className="text-lg font-semibold">{value}</div>
+      {badge && <span className={`inline-block mt-1 px-2 py-0.5 text-xs rounded-full ${badge==='高'?'bg-red-100 text-red-700':badge==='中'?'bg-yellow-100 text-yellow-700':'bg-green-100 text-green-700'}`}>{badge}</span>}
+    </div>
+  );
 }
-initPlaceholders();
 
-/* ============= 参考与回退说明（仅供用户参考） =============
-- Etherscan / BscScan V2 token endpoints (Top holders / tokeninfo) - docs: Etherscan Tokens endpoints (Get Token Holder List, Get Top Token Holders). If your account cannot access certain V2 endpoints you'll get an error and we fallback to demo.  [oai_citation:4‡docs.etherscan.io](https://docs.etherscan.io/api-endpoints/tokens?utm_source=chatgpt.com)
-- Covalent and Bitquery provide more complete token holder / LP analytics (often paid). If you need full historical holders or LP-owner breakdowns, consider Covalent/Bitquery.  [oai_citation:5‡Medium](https://medium.com/covalent-hq/how-to-use-the-covalent-token-holders-tool-to-export-data-to-a-spreadsheet-87701744c79d?utm_source=chatgpt.com)
-- Price data here is pulled from DexScreener (public), which is convenient for token pair price & chart.  [oai_citation:6‡docs.etherscan.io](https://docs.etherscan.io/api-endpoints/tokens?utm_source=chatgpt.com)
-============================================ */
+function download(data, filename, type) {
+  const blob = new Blob([data], {type});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
 
+createRoot(document.getElementById('root')).render(<App />);
 </script>
 </body>
 </html>
