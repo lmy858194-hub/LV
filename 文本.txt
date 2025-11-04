@@ -1,0 +1,232 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+interface IPancakeRouter {
+    function WETH() external pure returns (address);
+    function swapExactTokensForETHSupportingFeeOnTransferTokens(
+        uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline
+    ) external;
+    function swapExactETHForTokensSupportingFeeOnTransferTokens(
+        uint amountOutMin, address[] calldata path, address to, uint deadline
+    ) external payable;
+    function addLiquidityETH(
+        address token, uint amountTokenDesired, uint amountTokenMin, uint amountETHMin,
+        address to, uint deadline
+    ) external payable returns (uint, uint, uint);
+    function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory);
+    function factory() external view returns (address);
+}
+
+interface IPancakeFactory {
+    function createPair(address tokenA, address tokenB) external returns (address pair);
+}
+
+interface IPancakePair {
+    function totalSupply() external view returns (uint256);
+    function balanceOf(address) external view returns (uint256);
+}
+
+interface IOracle {
+    function getMarketVolatility() external view returns (uint256);
+}
+
+contract LiviaDepth is ERC20, Ownable {
+    IPancakeRouter public immutable router;
+    IOracle public immutable oracle;
+    address public pancakePair;
+
+    uint256 public constant TOTAL_SUPPLY = 1_000_000_000 * 1e18;
+    uint256 public constant TAX_DENOM = 1000;
+    uint256 public currentSellTax = 50;
+    uint256 public taxTriggerBNB = 0.5 ether;
+    uint256 public minSlippage = 900;
+    uint256 public volatilityLockTax = 10;
+
+    uint256 public perpetualPool;
+    mapping(address => uint256) public lastBuyTime;
+
+    uint256 public lpDividendPool;
+    mapping(address => uint256) public lpShares;
+    uint256 public totalLPShares = 1e18;
+    mapping(address => uint256) public claimedBNB;
+
+    address public devWallet;
+    address public constant DEAD = 0x000000000000000000000000000000000000dEaD;
+
+    bool private inSwap;
+    modifier lockSwap { inSwap = true; _; inSwap = false; }
+
+    event BNBDividendClaimed(address indexed user, uint256 amount);
+
+    constructor(address _oracle, address _router) ERC20("Livia Depth", "LVD") Ownable(msg.sender) {
+        require(_oracle != address(0) && _router != address(0), "Zero address");
+        oracle = IOracle(_oracle);
+        router = IPancakeRouter(_router);
+        devWallet = msg.sender;
+        _mint(msg.sender, TOTAL_SUPPLY);
+    }
+
+    function _update(address from, address to, uint256 value) internal override {
+        if (from == address(0) || to == address(0)) {
+            super._update(from, to, value);
+            return;
+        }
+
+        uint256 tax = 0;
+        if (to == pancakePair && from != address(router) && from != address(this)) {
+            uint256 rate = _getTaxRate(from);
+            try oracle.getMarketVolatility() returns (uint256 v) {
+                if (v > 100) rate = volatilityLockTax;
+            } catch {}
+            tax = value * rate / TAX_DENOM;
+            if (tax > 0) {
+                perpetualPool += tax;
+                super._update(from, address(this), tax);
+            }
+            if (!inSwap && estimatePoolBNB() >= taxTriggerBNB) _processCycle();
+        }
+
+        super._update(from, to, value - tax);
+        if (to != pancakePair && from != pancakePair) lastBuyTime[to] = block.timestamp;
+    }
+
+    function _getTaxRate(address user) internal view returns (uint256) {
+        uint256 held = block.timestamp - lastBuyTime[user];
+        uint256 base = currentSellTax;
+        if (held < 3 days) return base;
+        if (held < 7 days) return base * 4 / 5;
+        if (held < 15 days) return base * 3 / 5;
+        if (held < 30 days) return base * 2 / 5;
+        return base / 5 > 0 ? base / 5 : 0;
+    }
+
+    function setSellTax(uint256 newTax) external onlyOwner {
+        require(newTax <= currentSellTax, "Can only decrease");
+        currentSellTax = newTax;
+    }
+
+    function estimatePoolBNB() public view returns (uint256) {
+        if (perpetualPool == 0) return 0;
+        address[] memory path = new address[](2);
+        path[0] = address(this); path[1] = router.WETH();
+        uint256[] memory out = router.getAmountsOut(perpetualPool, path);
+        return out[1] * 9975 / 10000;
+    }
+
+    function triggerCycle() external lockSwap {
+        require(estimatePoolBNB() >= taxTriggerBNB, "Below threshold");
+        _processCycle();
+    }
+
+    function _processCycle() internal {
+        uint256 pool = perpetualPool; perpetualPool = 0;
+        uint256 buyback = pool * 30 / 100;
+        uint256 addDepth = pool * 40 / 100;
+        uint256 lpReward = pool * 20 / 100;
+        uint256 reserve = pool * 10 / 100;
+
+        if (buyback > 0) _buybackAndBurn(buyback);
+        if (addDepth > 0) _autoAddLP(addDepth);
+        if (lpReward > 0) _distributeBNBToLPs(lpReward);
+        if (reserve > 0) _handleReserve(reserve);
+    }
+
+    function _buybackAndBurn(uint256 amt) internal {
+        uint256 bnb = _swapForBNB(amt, address(this));
+        if (bnb > 0) {
+            (uint256 bought, uint256 left) = _swapBNBForToken(bnb, address(this));
+            if (bought > 0) _burn(address(this), bought);
+            if (left > 0) payable(devWallet).transfer(left);
+        }
+    }
+
+    function _autoAddLP(uint256 amt) internal {
+        uint256 half = amt / 2;
+        uint256 bnb = _swapForBNB(half, address(this));
+        if (bnb == 0) return;
+        _approve(address(this), address(router), half);
+        router.addLiquidityETH{value: bnb}(address(this), half, 0, 0, DEAD, block.timestamp + 300);
+    }
+
+    function _distributeBNBToLPs(uint256 amt) internal {
+        uint256 bnb = _swapForBNB(amt, address(this));
+        if (bnb > 0) lpDividendPool += bnb;
+    }
+
+    function _handleReserve(uint256 amt) internal {
+        try oracle.getMarketVolatility() returns (uint256 v) {
+            if (v > 100) {
+                _burn(address(this), amt);
+            } else {
+                _swapForBNB(amt, devWallet);
+            }
+        } catch {
+            _swapForBNB(amt, devWallet);
+        }
+    }
+
+    function claimBNBDividend() external {
+        uint256 pending = pendingBNBDividend(msg.sender);
+        require(pending > 0, "Nothing");
+        lpDividendPool -= pending;
+        claimedBNB[msg.sender] += pending;
+        payable(msg.sender).transfer(pending);
+        emit BNBDividendClaimed(msg.sender, pending);
+    }
+
+    function pendingBNBDividend(address user) public view returns (uint256) {
+        if (totalLPShares == 0) return 0;
+        uint256 entitled = (lpDividendPool * lpShares[user]) / totalLPShares;
+        return entitled > claimedBNB[user] ? entitled - claimedBNB[user] : 0;
+    }
+
+    function updateLPShares() external {
+        if (pancakePair == address(0)) return;
+        IPancakePair pair = IPancakePair(pancakePair);
+        uint256 userLP = pair.balanceOf(msg.sender);
+        uint256 totalLP = pair.totalSupply();
+        if (totalLP == 0) return;
+        lpShares[msg.sender] = (userLP * 1e18) / totalLP;
+    }
+
+    function _swapForBNB(uint256 amt, address to) internal returns (uint256) {
+        if (amt == 0) return 0;
+        address[] memory path = new address[](2);
+        path[0] = address(this); path[1] = router.WETH();
+        uint256[] memory out = router.getAmountsOut(amt, path);
+        uint256 min = out[1] * minSlippage / 1000;
+        _approve(address(this), address(router), amt);
+        uint256 bal = address(this).balance;
+        try router.swapExactTokensForETHSupportingFeeOnTransferTokens(amt, min, path, to, block.timestamp + 300) {} catch { return 0; }
+        return to == address(this) ? address(this).balance - bal : 0;
+    }
+
+    function _swapBNBForToken(uint256 bnb, address to) internal returns (uint256, uint256) {
+        if (bnb == 0) return (0, 0);
+        address[] memory path = new address[](2);
+        path[0] = router.WETH(); path[1] = address(this);
+        uint256[] memory out = router.getAmountsOut(bnb, path);
+        uint256 min = out[1] * minSlippage / 1000;
+        uint256 bal = balanceOf(to);
+        try router.swapExactETHForTokensSupportingFeeOnTransferTokens{value: bnb}(min, path, to, block.timestamp + 300) {} catch { return (0, bnb); }
+        return (balanceOf(to) - bal, address(this).balance);
+    }
+
+    function setPair() external onlyOwner {
+        if (pancakePair != address(0)) return;
+        pancakePair = IPancakeFactory(router.factory()).createPair(address(this), router.WETH());
+    }
+
+    function setDev(address d) external onlyOwner { require(d != address(0)); devWallet = d; }
+    function setTrigger(uint256 t) external onlyOwner { require(t > 0); taxTriggerBNB = t; }
+    function setSlippage(uint256 s) external onlyOwner { require(s <= 1000); minSlippage = s; }
+
+    function renounceOwnership() public override onlyOwner {
+        _transferOwnership(address(0));
+    }
+
+    receive() external payable {}
+}
